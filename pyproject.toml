@@ -1,0 +1,33 @@
+[project]
+name = "book-corpus-builder"
+version = "0.1.0"
+description = "Incremental knowledge extraction pipeline for fantasy books"
+requires-python = ">=3.11"
+dependencies = [
+    "ebooklib>=0.18",
+    "beautifulsoup4>=4.12",
+    "pydantic>=2.0",
+    "ruamel.yaml>=0.18",
+    "orjson>=3.9",
+    "rapidfuzz>=3.5",
+    "faiss-cpu>=1.7",
+    "networkx>=3.0",
+    "httpx>=0.25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

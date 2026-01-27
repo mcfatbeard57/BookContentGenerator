@@ -1,0 +1,1 @@
+"""Book → Canonical Corpus Builder"""
