@@ -73,11 +73,27 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return chunks
 
 
+
+# Model context limits (in tokens)
+MODEL_CONTEXT_LIMITS = {
+    "qwen2.5:7b": 32768,
+    "qwen2.5:3b": 32768,
+    "llama3.1:8b": 131072,
+    "nomic-embed-text": 8192,
+}
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate token count (rough: 1 token ≈ 4 chars for English)"""
+    return len(text) // 4
+
+
 def call_ollama(
     prompt: str,
     system_prompt: str,
     model: str = NER_MODEL,
-    timeout: float = 120.0,
+    timeout: float = 300.0,  # 5 minutes for M2 Mac
+    verbose: bool = True,
 ) -> str:
     """
     Call Ollama API for text generation.
@@ -85,6 +101,19 @@ def call_ollama(
     Returns raw response text.
     """
     url = f"{OLLAMA_BASE_URL}/api/generate"
+    
+    # Estimate tokens and check limits
+    prompt_tokens = estimate_tokens(prompt)
+    system_tokens = estimate_tokens(system_prompt)
+    total_input_tokens = prompt_tokens + system_tokens
+    context_limit = MODEL_CONTEXT_LIMITS.get(model, 32768)
+    
+    if verbose:
+        usage_pct = (total_input_tokens / context_limit) * 100
+        print(f"      [Tokens: ~{total_input_tokens:,} / {context_limit:,} ({usage_pct:.1f}%)]", end=" ", flush=True)
+    
+    if total_input_tokens > context_limit * 0.9:
+        print(f"⚠️ WARNING: Approaching context limit!")
     
     payload = {
         "model": model,
@@ -99,6 +128,13 @@ def call_ollama(
         response.raise_for_status()
         
         result = response.json()
+        
+        # Log actual token usage from Ollama response if available
+        if verbose and "eval_count" in result:
+            output_tokens = result.get("eval_count", 0)
+            total_time = result.get("total_duration", 0) / 1e9  # ns to seconds
+            print(f"→ {output_tokens} output tokens in {total_time:.1f}s")
+        
         return result.get("response", "")
 
 
@@ -221,9 +257,11 @@ def extract_entities_from_chapter(
     chunks = chunk_text(chapter.content)
     all_entities: list[RawEntity] = []
     
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks):
+        print(f"    Chunk {i + 1}/{len(chunks)}...", end=" ", flush=True)
         entities = extract_entities_from_chunk(chunk, chapter.title, book_title)
         all_entities.extend(entities)
+        print(f"found {len(entities)} entities")
     
     # Merge duplicates within chapter
     return merge_raw_entities(all_entities)
