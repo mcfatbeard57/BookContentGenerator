@@ -36,7 +36,7 @@ EMBEDDING_MODEL = "nomic-embed-text"
 OLLAMA_OPTIONS = {
     "temperature": 0.0,
     "seed": 42,
-    "num_predict": 2048,
+    "num_predict": 4096,  # Increased for richer outputs
 }
 
 # =============================================================================
@@ -71,7 +71,17 @@ RELATIONSHIP_TYPES = [
 # =============================================================================
 # PROCESSING LIMITS
 # =============================================================================
-CHUNK_SIZE = 2000  # characters per chunk for LLM processing (reduced for speed)
-CHUNK_OVERLAP = 100  # overlap between chunks
-MAX_RETRIES = 2  # LLM call retries (reduced)
+# Increased chunk size: Uses more of the 32K context window per call
+# qwen2.5:7b has 32K context, we're using ~2500 tokens per call (8%)
+# Increasing to 8000 chars uses ~25% context, reducing total calls by 4x
+CHUNK_SIZE = 8000  # characters per chunk (increased from 2000)
+CHUNK_OVERLAP = 200  # overlap between chunks
+MAX_RETRIES = 3  # LLM call retries
 FUZZY_MATCH_THRESHOLD = 85  # rapidfuzz threshold for alias matching
+
+# =============================================================================
+# CHECKPOINTING
+# =============================================================================
+CHECKPOINT_INTERVAL = 5  # Save checkpoint every N chapters
+CHECKPOINT_FILE = CORPUS_METADATA_DIR / "extraction_checkpoint.json"
+
