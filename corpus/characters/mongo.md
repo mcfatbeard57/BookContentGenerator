@@ -27,6 +27,9 @@ sources:
 first_appearance: '46'
 occurrence_count: 9
 last_updated: '2026-01-30'
+priority: canonical
+is_wiki_linked: true
+wiki_entry_name: mongo
 ---
 
 ## Canonical Description

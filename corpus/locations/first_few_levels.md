@@ -10,6 +10,9 @@ sources:
 first_appearance: '4'
 occurrence_count: 1
 last_updated: '2026-01-30'
+priority: canonical
+is_wiki_linked: true
+wiki_entry_name: first floor
 ---
 
 ## Canonical Description

@@ -9,6 +9,8 @@ sources:
 first_appearance: '9'
 occurrence_count: 11
 last_updated: '2026-01-30'
+priority: major
+is_wiki_linked: false
 ---
 
 ## Canonical Description

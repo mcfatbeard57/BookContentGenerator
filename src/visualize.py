@@ -12,13 +12,21 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     <title>Knowledge Graph - 3D Visualization</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
+        html, body { 
+            width: 100%;
+            height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: #111;
             color: #fff;
             overflow: hidden;
         }
-        #container { width: 100vw; height: 100vh; }
+        #container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
         
         #controls {
             position: absolute;
@@ -117,6 +125,12 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             <div class="legend-item"><div class="legend-color" style="background:#fb923c"></div>Factions</div>
             <div class="legend-item"><div class="legend-color" style="background:#c084fc"></div>Events</div>
         </div>
+        <div class="legend" style="border-top:1px solid #333;padding-top:10px;margin-top:10px;">
+            <div style="font-size:11px;color:#888;margin-bottom:5px;">Node Size = Priority</div>
+            <div class="legend-item">🌟 Canonical (from wiki)</div>
+            <div class="legend-item">⭐ Major (frequent)</div>
+            <div class="legend-item" style="opacity:0.6">○ Minor</div>
+        </div>
         <div class="stats">
             <div>Nodes: <span id="nodes">0</span></div>
             <div>Edges: <span id="edges">0</span></div>
@@ -146,11 +160,19 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             timeline_event: '#c084fc'
         };
         
-        // Build nodes array
+        // Priority sizing multipliers
+        const PRIORITY_SIZE = {
+            canonical: 3.0,   // Largest
+            major: 1.8,       // Medium
+            minor: 1.0        // Default
+        };
+        
+        // Build nodes array with priority
         const nodes = Object.values(data.nodes).map(n => ({
             id: n.entity_id,
             name: n.name,
-            type: n.entity_type
+            type: n.entity_type,
+            priority: n.priority || 'minor'
         }));
         
         // Build links array (only between existing nodes)
@@ -178,10 +200,17 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         const Graph = ForceGraph3D()(document.getElementById('container'))
             .graphData({ nodes, links })
             .backgroundColor('#111')
-            .nodeRelSize(6)
-            .nodeVal(n => Math.max(1, (connCount[n.id] || 0) * 0.5 + 1))
-            .nodeColor(n => highlighted.size === 0 || highlighted.has(n.id) ? COLORS[n.type] || '#888' : '#222')
-            .nodeOpacity(1)
+            .nodeRelSize(5)
+            .nodeVal(n => {
+                const priorityMult = PRIORITY_SIZE[n.priority] || 1;
+                const connMult = Math.max(1, (connCount[n.id] || 0) * 0.3 + 1);
+                return priorityMult * connMult;
+            })
+            .nodeColor(n => {
+                if (highlighted.size > 0 && !highlighted.has(n.id)) return '#222';
+                return COLORS[n.type] || '#888';
+            })
+            .nodeOpacity(0.9)
             .linkColor(() => 'rgba(100,150,255,0.4)')
             .linkWidth(1)
             .linkOpacity(0.6)
@@ -208,7 +237,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     const typeEl = document.getElementById('info-type');
                     typeEl.textContent = n.type.replace('_', ' ').toUpperCase();
                     typeEl.style.background = COLORS[n.type];
-                    document.getElementById('info-conn').textContent = (connCount[n.id] || 0) + ' connections';
+                    const priorityLabel = n.priority === 'canonical' ? '🌟 Canonical' : (n.priority === 'major' ? '⭐ Major' : 'Minor');
+                    document.getElementById('info-conn').textContent = priorityLabel + ' • ' + (connCount[n.id] || 0) + ' connections';
                     info.style.display = 'block';
                 }
                 Graph.nodeColor(Graph.nodeColor());

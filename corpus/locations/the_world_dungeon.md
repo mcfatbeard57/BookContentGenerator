@@ -12,6 +12,9 @@ sources:
 first_appearance: '1'
 occurrence_count: 13
 last_updated: '2026-01-30'
+priority: canonical
+is_wiki_linked: true
+wiki_entry_name: the world dungeon
 ---
 
 ## Canonical Description

@@ -22,6 +22,12 @@ INGESTION_LOG_PATH = CORPUS_METADATA_DIR / "ingestion_log.json"
 WORLD_GRAPH_PATH = CORPUS_GRAPH_DIR / "world_graph.json"
 FAISS_INDEX_PATH = CORPUS_GRAPH_DIR / "entity_index.faiss"
 
+# Wiki reference for priority classification
+WIKI_JSON_PATH = DATA_DIR / "book1_wiki.json"
+
+# Priority tiers for entity classification
+PRIORITY_TIERS = ["canonical", "major", "minor"]
+
 # =============================================================================
 # OLLAMA CONFIGURATION
 # =============================================================================
@@ -71,11 +77,12 @@ RELATIONSHIP_TYPES = [
 # =============================================================================
 # PROCESSING LIMITS
 # =============================================================================
-# Increased chunk size: Uses more of the 32K context window per call
-# qwen2.5:7b has 32K context, we're using ~2500 tokens per call (8%)
-# Increasing to 8000 chars uses ~25% context, reducing total calls by 4x
-CHUNK_SIZE = 8000  # characters per chunk (increased from 2000)
-CHUNK_OVERLAP = 200  # overlap between chunks
+# Optimized chunk size for qwen2.5:7b (32K context window):
+# - 16000 chars ≈ 4000 tokens = ~12% of context
+# - Leaves room for: wiki context (~2K), system prompt (~500), output (~4K)
+# - Reduces total LLM calls by ~8x compared to original 2000
+CHUNK_SIZE = 16000  # characters per chunk (optimized for 32K context)
+CHUNK_OVERLAP = 400  # overlap between chunks (increased for continuity)
 MAX_RETRIES = 3  # LLM call retries
 FUZZY_MATCH_THRESHOLD = 85  # rapidfuzz threshold for alias matching
 

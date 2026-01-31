@@ -27,6 +27,8 @@ def entity_to_frontmatter(entity: Entity) -> dict:
         "entity_type": entity.entity_type,
         "entity_id": entity.entity_id,
         "name": entity.name,
+        "priority": entity.priority,
+        "is_wiki_linked": entity.is_wiki_linked,
         "aliases": entity.aliases if entity.aliases else [],
         "sources": [
             {
@@ -39,6 +41,10 @@ def entity_to_frontmatter(entity: Entity) -> dict:
         "occurrence_count": entity.occurrence_count,
         "last_updated": entity.last_updated.isoformat(),
     }
+    
+    # Add wiki entry name if linked
+    if entity.wiki_entry_name:
+        frontmatter["wiki_entry_name"] = entity.wiki_entry_name
     
     return frontmatter
 

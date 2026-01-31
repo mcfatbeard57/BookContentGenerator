@@ -12,6 +12,8 @@ sources:
 first_appearance: '22'
 occurrence_count: 15
 last_updated: '2026-01-30'
+priority: major
+is_wiki_linked: false
 ---
 
 ## Canonical Description

@@ -10,6 +10,8 @@ first_appearance: The page where we tout Facebook groups so they let us spam
   them about this book
 occurrence_count: 1
 last_updated: '2026-01-30'
+priority: minor
+is_wiki_linked: false
 ---
 
 ## Canonical Description

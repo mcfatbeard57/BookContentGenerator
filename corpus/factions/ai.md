@@ -14,6 +14,9 @@ sources:
 first_appearance: '20'
 occurrence_count: 5
 last_updated: '2026-01-30'
+priority: canonical
+is_wiki_linked: true
+wiki_entry_name: viceroys
 ---
 
 ## Canonical Description

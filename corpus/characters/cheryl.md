@@ -10,6 +10,8 @@ sources:
 first_appearance: It’s Over, Yo
 occurrence_count: 2
 last_updated: '2026-01-30'
+priority: minor
+is_wiki_linked: false
 ---
 
 ## Canonical Description

@@ -9,6 +9,9 @@ sources:
 first_appearance: '22'
 occurrence_count: 1
 last_updated: '2026-01-30'
+priority: canonical
+is_wiki_linked: true
+wiki_entry_name: dungeon entrance
 ---
 
 ## Canonical Description
