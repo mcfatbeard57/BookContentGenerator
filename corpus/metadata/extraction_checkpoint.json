@@ -1,0 +1,121 @@
+{
+  "book_id": "dungeon_crawler_carl_01matt_dinniman",
+  "book_title": "Dungeon Crawler Carl - 01",
+  "total_chapters": 57,
+  "completed_chapters": [
+    "Chapter 1",
+    "Chapter 2",
+    "Chapter 3",
+    "1",
+    "2"
+  ],
+  "entities_extracted": [
+    {
+      "name": "Dungeon Crawler Carl",
+      "entity_type": "character",
+      "context": "Dungeon Crawler Carl - 01"
+    },
+    {
+      "name": "Matt Dinniman",
+      "entity_type": "character",
+      "context": "Copyright \u00a9 2020 by Matt Dinniman All rights reserved."
+    },
+    {
+      "name": "Cheryl Dyson",
+      "entity_type": "character",
+      "context": "Edited by Cheryl Dyson http://www .cheryldyson.com"
+    },
+    {
+      "name": "Elartwyne Estole",
+      "entity_type": "character",
+      "context": "Cover Illustration by Elartwyne Estole https:// www. artstation. com/ elartestole"
+    },
+    {
+      "name": "Toby Dinniman",
+      "entity_type": "character",
+      "context": "Cover Design by Toby Dinniman https:// www. collageorama.com"
+    },
+    {
+      "name": "Erik Wilson",
+      "entity_type": "character",
+      "context": "Interior Illustrations by Erik Wilson http:// www. erikwilsonartgallery.com/"
+    },
+    {
+      "name": "Donut Holes",
+      "entity_type": "faction",
+      "context": "especially those who have stuck with me through all the years. And I would like to toss out an extra-special thanks to all my Donut Holes over on Patreon."
+    },
+    {
+      "name": "Coliseum",
+      "entity_type": "location",
+      "context": "when the Coliseum falls, so will Rome"
+    },
+    {
+      "name": "Rome",
+      "entity_type": "location",
+      "context": "Rome will exist as long as the Coliseum does; when the Coliseum falls, so will Rome"
+    },
+    {
+      "name": "world",
+      "entity_type": "location",
+      "context": "when Rome falls, so will the world"
+    },
+    {
+      "name": "Carl",
+      "entity_type": "character",
+      "context": "I know, immature. But it was freezing outside."
+    },
+    {
+      "name": "Donut",
+      "entity_type": "character",
+      "context": "She continued to howl. A light popped on in an apartment on the first floor. 'What in god\u2019s names is going on out here?' Mrs. Parsons called, sticking her head out the window."
+    },
+    {
+      "name": "Mrs. Parsons",
+      "entity_type": "character",
+      "context": "'Carl, is that you?'"
+    },
+    {
+      "name": "Beatrice",
+      "entity_type": "character",
+      "context": "She continued to howl. A light popped on in an apartment on the first floor. 'What in god\u2019s names is going on out here?' Mrs. Parsons called, sticking her head out the window."
+    },
+    {
+      "name": "Boran Corporation",
+      "entity_type": "faction",
+      "context": "Per Syndicate rules, subsection 543 of the Precious Elemental Reserves Code, having failed to file a proper appeal for mineral and elemental rights within 50 Solars of first contact, your planet has been successfully seized and is currently being mined of all requested elemental deposits by the assigned planetary regent."
+    },
+    {
+      "name": "Syndicate",
+      "entity_type": "faction",
+      "context": "Per Syndicate rules, subsection 543 of the Precious Elemental Reserves Code, having failed to file a proper appeal for mineral and elemental rights within 50 Solars of first contact, your planet has been successfully seized and is currently being mined of all requested elemental deposits by the assigned planetary regent."
+    },
+    {
+      "name": "World Dungeon",
+      "entity_type": "timeline_event",
+      "context": "Per Syndicate rules, subsection 543 of the Precious Elemental Reserves Code, having failed to file a proper appeal for mineral and elemental rights within 50 Solars of first contact, your planet has been successfully seized and is currently being mined of all requested elemental deposits by the assigned planetary regent."
+    },
+    {
+      "name": "Crawler #4,122",
+      "entity_type": "character",
+      "context": "You have been designated Crawler Number 4,122."
+    },
+    {
+      "name": "Mordecai",
+      "entity_type": "character",
+      "context": "A bearded, rat-like creature appeared in the doorway. I could barely make out his features, but he was about a head shorter than me. So taller than the goblins, but not by much."
+    },
+    {
+      "name": "Goblin",
+      "entity_type": "character",
+      "context": "One of the goblins said something to the rat man behind the door, whose name appeared to be Mordecai."
+    },
+    {
+      "name": "Tutorial Guild",
+      "entity_type": "location",
+      "context": "A single, plain wooden door built into the wall. A simple sign was attached to the wall above the door. The words were painted the same color as the dark-red bricks of the wall, and I could barely read it. It read \u201cTutorial Guild.\u201d"
+    }
+  ],
+  "last_updated": "2026-01-31T19:43:28.465148",
+  "errors": []
+}

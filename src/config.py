@@ -81,7 +81,7 @@ RELATIONSHIP_TYPES = [
 # - 16000 chars ≈ 4000 tokens = ~12% of context
 # - Leaves room for: wiki context (~2K), system prompt (~500), output (~4K)
 # - Reduces total LLM calls by ~8x compared to original 2000
-CHUNK_SIZE = 16000  # characters per chunk (optimized for 32K context)
+CHUNK_SIZE = 24000  # characters per chunk (optimized for 32K context)
 CHUNK_OVERLAP = 400  # overlap between chunks (increased for continuity)
 MAX_RETRIES = 3  # LLM call retries
 FUZZY_MATCH_THRESHOLD = 85  # rapidfuzz threshold for alias matching
@@ -91,4 +91,10 @@ FUZZY_MATCH_THRESHOLD = 85  # rapidfuzz threshold for alias matching
 # =============================================================================
 CHECKPOINT_INTERVAL = 5  # Save checkpoint every N chapters
 CHECKPOINT_FILE = CORPUS_METADATA_DIR / "extraction_checkpoint.json"
+
+# =============================================================================
+# DASHBOARD
+# =============================================================================
+DASHBOARD_HOST = "127.0.0.1"
+DASHBOARD_PORT = 8080
 

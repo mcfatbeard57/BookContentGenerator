@@ -100,6 +100,8 @@ def call_ollama(
     
     Returns raw response text.
     """
+    from src.observability.token_tracker import tracker
+    
     url = f"{OLLAMA_BASE_URL}/api/generate"
     
     # Estimate tokens and check limits
@@ -130,9 +132,18 @@ def call_ollama(
         result = response.json()
         
         # Log actual token usage from Ollama response if available
-        if verbose and "eval_count" in result:
-            output_tokens = result.get("eval_count", 0)
-            total_time = result.get("total_duration", 0) / 1e9  # ns to seconds
+        output_tokens = result.get("eval_count", 0)
+        total_time = result.get("total_duration", 0) / 1e9  # ns to seconds
+        
+        # Record token usage
+        tracker.record(
+            model=model,
+            prompt_tokens=total_input_tokens,
+            output_tokens=output_tokens,
+            duration_seconds=total_time,
+        )
+        
+        if verbose and output_tokens:
             print(f"→ {output_tokens} output tokens in {total_time:.1f}s")
         
         return result.get("response", "")
@@ -175,6 +186,8 @@ def extract_entities_from_chunk(
     """
     Extract entities from a single text chunk.
     """
+    from src.observability.progress import check_interrupt
+    
     prompt = NER_USER_PROMPT_TEMPLATE.format(
         chapter_title=chapter_title,
         book_title=book_title,
@@ -182,6 +195,11 @@ def extract_entities_from_chunk(
     )
     
     for attempt in range(MAX_RETRIES):
+        # Check for interrupt before each LLM call
+        if check_interrupt():
+            print("\n⚠️ Interrupted before LLM call")
+            raise InterruptedError("User requested stop")
+        
         try:
             response = call_ollama(prompt, NER_SYSTEM_PROMPT)
             parsed = parse_json_response(response)
@@ -208,6 +226,9 @@ def extract_entities_from_chunk(
                     ))
                 
                 return entities
+        
+        except InterruptedError:
+            raise  # Re-raise interrupt
         
         except httpx.HTTPError as e:
             if attempt == MAX_RETRIES - 1:
@@ -250,18 +271,37 @@ def merge_raw_entities(entities: list[RawEntity]) -> list[RawEntity]:
 def extract_entities_from_chapter(
     chapter: Chapter,
     book_title: str,
+    chapter_index: int = 0,
+    total_chapters: int = 1,
 ) -> list[RawEntity]:
     """
     Extract entities from a single chapter, handling chunking.
+    Emits progress events and handles interrupts.
     """
+    from src.observability.progress import emit_progress, ProgressStage
+    
     chunks = chunk_text(chapter.content)
     all_entities: list[RawEntity] = []
     
     for i, chunk in enumerate(chunks):
         print(f"    Chunk {i + 1}/{len(chunks)}...", end=" ", flush=True)
-        entities = extract_entities_from_chunk(chunk, chapter.title, book_title)
-        all_entities.extend(entities)
-        print(f"found {len(entities)} entities")
+        
+        # Emit progress for this chunk
+        overall_progress = chapter_index + (i / len(chunks))
+        emit_progress(
+            stage=ProgressStage.EXTRACTING_ENTITIES,
+            current=int(overall_progress),
+            total=total_chapters,
+            message=f"Chapter {chapter_index + 1}/{total_chapters}: {chapter.title} (chunk {i + 1}/{len(chunks)})",
+        )
+        
+        try:
+            entities = extract_entities_from_chunk(chunk, chapter.title, book_title)
+            all_entities.extend(entities)
+            print(f"found {len(entities)} entities")
+        except InterruptedError:
+            print(f"\n⚠️ Interrupted at chunk {i + 1}/{len(chunks)}")
+            raise
     
     # Merge duplicates within chapter
     return merge_raw_entities(all_entities)
@@ -272,27 +312,61 @@ def extract_entities_from_book(book: ParsedBook) -> ExtractionResult:
     Extract all entities from a parsed book.
     
     Processes chapters sequentially and merges results.
+    Supports interruption via progress.check_interrupt() and saves checkpoints.
     """
+    from src.observability.progress import check_interrupt, clear_interrupt
+    from src.observability.checkpoint import CheckpointManager, save_checkpoint
+    
     result = ExtractionResult(book_id=book.book_id)
     all_entities: list[RawEntity] = []
     
     print(f"Extracting entities from '{book.title}'...")
     
-    for i, chapter in enumerate(book.chapters):
-        print(f"  Processing chapter {i + 1}/{len(book.chapters)}: {chapter.title}")
-        
-        try:
-            entities = extract_entities_from_chapter(chapter, book.title)
-            all_entities.extend(entities)
-            result.chapters_processed += 1
-        except Exception as e:
-            error_msg = f"Error processing chapter '{chapter.title}': {e}"
-            print(f"  Warning: {error_msg}")
-            result.errors.append(error_msg)
+    # Use checkpoint manager to save progress
+    with CheckpointManager(book.book_id, book.title, len(book.chapters)) as mgr:
+        for i, chapter in enumerate(book.chapters):
+            # Check for interrupt before each chapter
+            if check_interrupt():
+                print(f"\n  ⚠️ Extraction interrupted by user after {i} chapters")
+                # Save final checkpoint before exiting
+                save_checkpoint(mgr.checkpoint)
+                break
+            
+            # Skip already processed chapters (from checkpoint)
+            if mgr.is_chapter_done(chapter.title):
+                print(f"  Skipping chapter {i + 1}/{len(book.chapters)}: {chapter.title} (already done)")
+                continue
+            
+            print(f"  Processing chapter {i + 1}/{len(book.chapters)}: {chapter.title}")
+            
+            try:
+                entities = extract_entities_from_chapter(
+                    chapter, 
+                    book.title,
+                    chapter_index=i,
+                    total_chapters=len(book.chapters),
+                )
+                
+                # Convert RawEntity to dict for checkpoint
+                entity_dicts = [
+                    {"name": e.name, "entity_type": e.entity_type, "context": e.context}
+                    for e in entities
+                ]
+                mgr.mark_complete(chapter.title, entity_dicts)
+                
+                all_entities.extend(entities)
+                result.chapters_processed += 1
+            except InterruptedError:
+                print(f"\n  ⚠️ Extraction interrupted during chapter {i + 1}")
+                save_checkpoint(mgr.checkpoint)
+                break
     
     # Merge all duplicates across chapters
     result.entities = merge_raw_entities(all_entities)
     
     print(f"  Extracted {len(result.entities)} unique entities from {result.chapters_processed} chapters")
+    
+    # Clear interrupt flag after completion
+    clear_interrupt()
     
     return result
