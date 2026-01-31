@@ -1,121 +1,269 @@
-"""Graph Visualizer - Generate interactive HTML visualization of the knowledge graph"""
+"""3D Interactive Graph Visualization"""
 import json
 import webbrowser
 from pathlib import Path
 
-from src.config import WORLD_GRAPH_PATH, CORPUS_DIR
+from src.config import CORPUS_DIR, WORLD_GRAPH_PATH
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE = '''<!DOCTYPE html>
 <html>
 <head>
-    <title>Knowledge Graph Visualization</title>
-    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <title>Knowledge Graph - 3D Visualization</title>
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-        #graph { width: 100vw; height: 100vh; }
-        #legend { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .legend-item { display: flex; align-items: center; margin: 5px 0; }
-        .legend-color { width: 20px; height: 20px; border-radius: 50%; margin-right: 10px; }
-        h3 { margin: 0 0 10px 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #111;
+            color: #fff;
+            overflow: hidden;
+        }
+        #container { width: 100vw; height: 100vh; }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            max-width: 280px;
+            z-index: 100;
+        }
+        
+        h2 { 
+            font-size: 18px; 
+            margin-bottom: 15px;
+            color: #60a5fa;
+        }
+        
+        .legend { margin-bottom: 15px; }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+            font-size: 13px;
+        }
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .stats {
+            font-size: 12px;
+            color: #888;
+            border-top: 1px solid #333;
+            padding-top: 12px;
+        }
+        .stats div { margin: 3px 0; }
+        .stats span { color: #60a5fa; }
+        
+        #info {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            display: none;
+            z-index: 100;
+        }
+        #info h3 { color: #fff; margin: 5px 0; font-size: 16px; }
+        #info .type { 
+            font-size: 11px; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+            display: inline-block;
+        }
+        
+        #search {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+        #search input {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            width: 220px;
+        }
+        #search input:focus { outline: none; border-color: #60a5fa; }
+        
+        .hint {
+            position: absolute;
+            bottom: 15px;
+            left: 20px;
+            font-size: 11px;
+            color: #555;
+        }
     </style>
 </head>
 <body>
-    <div id="graph"></div>
-    <div id="legend">
-        <h3>Entity Types</h3>
-        <div class="legend-item"><div class="legend-color" style="background:#4CAF50"></div> Character</div>
-        <div class="legend-item"><div class="legend-color" style="background:#2196F3"></div> Location</div>
-        <div class="legend-item"><div class="legend-color" style="background:#FF9800"></div> Faction</div>
-        <div class="legend-item"><div class="legend-color" style="background:#9C27B0"></div> Timeline Event</div>
+    <div id="container"></div>
+    
+    <div id="controls">
+        <h2>🌐 Knowledge Graph</h2>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color" style="background:#4ade80"></div>Characters</div>
+            <div class="legend-item"><div class="legend-color" style="background:#60a5fa"></div>Locations</div>
+            <div class="legend-item"><div class="legend-color" style="background:#fb923c"></div>Factions</div>
+            <div class="legend-item"><div class="legend-color" style="background:#c084fc"></div>Events</div>
+        </div>
+        <div class="stats">
+            <div>Nodes: <span id="nodes">0</span></div>
+            <div>Edges: <span id="edges">0</span></div>
+        </div>
     </div>
+    
+    <div id="search"><input type="text" placeholder="Search..." id="q"></div>
+    
+    <div id="info">
+        <div class="type" id="info-type">TYPE</div>
+        <h3 id="info-name">Name</h3>
+        <div id="info-conn" style="font-size:12px;color:#888;margin-top:5px"></div>
+    </div>
+    
+    <div class="hint">Click node to highlight • Drag to rotate • Scroll to zoom</div>
+
+    <script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
     <script>
-        const graphData = GRAPH_DATA_PLACEHOLDER;
+        // Graph data
+        const data = GRAPH_DATA_PLACEHOLDER;
         
-        const colorMap = {
-            'character': '#4CAF50',
-            'location': '#2196F3',
-            'faction': '#FF9800',
-            'timeline_event': '#9C27B0'
+        // Colors by type
+        const COLORS = {
+            character: '#4ade80',
+            location: '#60a5fa', 
+            faction: '#fb923c',
+            timeline_event: '#c084fc'
         };
         
-        const nodes = new vis.DataSet(
-            Object.values(graphData.nodes).map(n => ({
-                id: n.entity_id,
-                label: n.name,
-                color: colorMap[n.entity_type] || '#666',
-                shape: 'dot',
-                size: 20,
-                font: { size: 14, color: '#333' }
-            }))
-        );
+        // Build nodes array
+        const nodes = Object.values(data.nodes).map(n => ({
+            id: n.entity_id,
+            name: n.name,
+            type: n.entity_type
+        }));
         
-        const edges = new vis.DataSet(
-            graphData.edges.map((e, i) => ({
-                id: i,
-                from: e.from_id,
-                to: e.to_id,
-                label: e.relation,
-                arrows: 'to',
-                font: { size: 10, color: '#666' },
-                color: { color: '#999', highlight: '#333' }
-            }))
-        );
+        // Build links array (only between existing nodes)
+        const nodeSet = new Set(nodes.map(n => n.id));
+        const links = data.edges
+            .filter(e => nodeSet.has(e.from_id) && nodeSet.has(e.to_id))
+            .map(e => ({ source: e.from_id, target: e.to_id }));
         
-        const container = document.getElementById('graph');
-        const data = { nodes, edges };
-        const options = {
-            physics: {
-                stabilization: { iterations: 100 },
-                barnesHut: { gravitationalConstant: -3000, springLength: 150 }
-            },
-            interaction: { hover: true, zoomView: true }
-        };
+        // Count connections
+        const connCount = {};
+        links.forEach(l => {
+            connCount[l.source] = (connCount[l.source] || 0) + 1;
+            connCount[l.target] = (connCount[l.target] || 0) + 1;
+        });
         
-        new vis.Network(container, data, options);
+        // Update UI
+        document.getElementById('nodes').textContent = nodes.length;
+        document.getElementById('edges').textContent = links.length;
+        
+        // State
+        let selected = null;
+        const highlighted = new Set();
+        
+        // Create graph
+        const Graph = ForceGraph3D()(document.getElementById('container'))
+            .graphData({ nodes, links })
+            .backgroundColor('#111')
+            .nodeRelSize(6)
+            .nodeVal(n => Math.max(1, (connCount[n.id] || 0) * 0.5 + 1))
+            .nodeColor(n => highlighted.size === 0 || highlighted.has(n.id) ? COLORS[n.type] || '#888' : '#222')
+            .nodeOpacity(1)
+            .linkColor(() => 'rgba(100,150,255,0.4)')
+            .linkWidth(1)
+            .linkOpacity(0.6)
+            .onNodeHover(n => {
+                document.body.style.cursor = n ? 'pointer' : 'default';
+            })
+            .onNodeClick(n => {
+                const info = document.getElementById('info');
+                if (selected === n) {
+                    selected = null;
+                    highlighted.clear();
+                    info.style.display = 'none';
+                } else {
+                    selected = n;
+                    highlighted.clear();
+                    highlighted.add(n.id);
+                    links.forEach(l => {
+                        const src = typeof l.source === 'object' ? l.source.id : l.source;
+                        const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+                        if (src === n.id) highlighted.add(tgt);
+                        if (tgt === n.id) highlighted.add(src);
+                    });
+                    document.getElementById('info-name').textContent = n.name;
+                    const typeEl = document.getElementById('info-type');
+                    typeEl.textContent = n.type.replace('_', ' ').toUpperCase();
+                    typeEl.style.background = COLORS[n.type];
+                    document.getElementById('info-conn').textContent = (connCount[n.id] || 0) + ' connections';
+                    info.style.display = 'block';
+                }
+                Graph.nodeColor(Graph.nodeColor());
+            });
+        
+        // Search
+        document.getElementById('q').addEventListener('input', e => {
+            const q = e.target.value.toLowerCase();
+            highlighted.clear();
+            if (q) {
+                nodes.forEach(n => {
+                    if (n.name.toLowerCase().includes(q)) highlighted.add(n.id);
+                });
+            }
+            Graph.nodeColor(Graph.nodeColor());
+        });
+        
+        // Physics
+        Graph.d3Force('charge').strength(-50);
+        Graph.d3Force('link').distance(80);
+        
+        // Start zoomed out
+        Graph.cameraPosition({ z: 600 });
     </script>
 </body>
-</html>"""
+</html>'''
 
 
-def visualize_graph(graph_path: Path | None = None, output_path: Path | None = None, open_browser: bool = True):
-    """
-    Generate an interactive HTML visualization of the knowledge graph.
-    
-    Args:
-        graph_path: Path to world_graph.json
-        output_path: Where to save the HTML file
-        open_browser: Whether to open in default browser
-    """
+def visualize_graph_3d(
+    graph_path: Path | None = None,
+    output_path: Path | None = None,
+    open_browser: bool = True,
+) -> Path:
+    """Generate interactive 3D graph visualization."""
     graph_path = graph_path or WORLD_GRAPH_PATH
-    output_path = output_path or (CORPUS_DIR / "graph_visualization.html")
+    output_path = output_path or (CORPUS_DIR / "graph_3d.html")
     
     if not graph_path.exists():
-        print(f"Error: Graph file not found: {graph_path}")
-        print("Run the pipeline first to generate the graph.")
-        return
+        print(f"Error: Graph not found: {graph_path}")
+        return None
     
-    # Load graph data
     with open(graph_path, "r") as f:
         graph_data = json.load(f)
     
-    # Generate HTML
-    html = HTML_TEMPLATE.replace(
-        "GRAPH_DATA_PLACEHOLDER",
-        json.dumps(graph_data)
-    )
-    
-    # Write output
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    html = HTML_TEMPLATE.replace("GRAPH_DATA_PLACEHOLDER", json.dumps(graph_data))
     output_path.write_text(html)
     
-    print(f"✅ Graph visualization saved to: {output_path}")
-    print(f"   Nodes: {len(graph_data.get('nodes', {}))}")
-    print(f"   Edges: {len(graph_data.get('edges', []))}")
+    print(f"✅ 3D Graph: {output_path}")
+    print(f"   Nodes: {len(graph_data.get('nodes', {}))}, Edges: {len(graph_data.get('edges', []))}")
     
     if open_browser:
         webbrowser.open(f"file://{output_path.absolute()}")
+    
+    return output_path
 
 
 if __name__ == "__main__":
-    visualize_graph()
+    visualize_graph_3d()
