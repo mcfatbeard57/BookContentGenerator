@@ -1,0 +1,20 @@
+---
+entity_type: location
+entity_id: loc_vshaped_braces
+name: V-shaped braces
+aliases: []
+sources:
+  - source_type: book
+    source_id: dungeon_crawler_carl_01matt_dinniman
+first_appearance: '26'
+occurrence_count: 1
+last_updated: '2026-01-30'
+---
+
+## Canonical Description
+
+V-shaped braces are a type of equipment, not a physical location.
+
+## Location Type
+
+equipment

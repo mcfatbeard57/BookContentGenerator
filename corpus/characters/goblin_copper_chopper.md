@@ -1,0 +1,28 @@
+---
+entity_type: character
+entity_id: char_goblin_copper_chopper
+name: Goblin Copper Chopper
+aliases: []
+sources:
+  - source_type: book
+    source_id: dungeon_crawler_carl_01matt_dinniman
+first_appearance: '40'
+occurrence_count: 1
+last_updated: '2026-01-30'
+---
+
+## Canonical Description
+
+Goblin Copper Chopper is a goblin who has been alerted to an imminent boiler breach.
+
+## Physical Traits
+
+- goblin
+
+## Role
+
+minor
+
+## Species
+
+goblin

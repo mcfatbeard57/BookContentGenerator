@@ -28,8 +28,8 @@ FAISS_INDEX_PATH = CORPUS_GRAPH_DIR / "entity_index.faiss"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # Models
-NER_MODEL = "qwen2.5:7b-instruct"
-SUMMARIZER_MODEL = "llama3.1:8b-instruct"
+NER_MODEL = "qwen2.5:7b"  # qwen2.5:7b-instruct if you have it
+SUMMARIZER_MODEL = "llama3.1:8b"  # llama3.1:8b-instruct if you have it
 EMBEDDING_MODEL = "nomic-embed-text"
 
 # Generation parameters (deterministic)
@@ -71,7 +71,7 @@ RELATIONSHIP_TYPES = [
 # =============================================================================
 # PROCESSING LIMITS
 # =============================================================================
-CHUNK_SIZE = 4000  # characters per chunk for LLM processing
-CHUNK_OVERLAP = 200  # overlap between chunks
-MAX_RETRIES = 3  # LLM call retries
+CHUNK_SIZE = 2000  # characters per chunk for LLM processing (reduced for speed)
+CHUNK_OVERLAP = 100  # overlap between chunks
+MAX_RETRIES = 2  # LLM call retries (reduced)
 FUZZY_MATCH_THRESHOLD = 85  # rapidfuzz threshold for alias matching

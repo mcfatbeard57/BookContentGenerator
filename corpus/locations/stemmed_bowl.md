@@ -1,0 +1,25 @@
+---
+entity_type: location
+entity_id: loc_stemmed_bowl
+name: stemmed bowl
+aliases:
+  - bowl
+sources:
+  - source_type: book
+    source_id: dungeon_crawler_carl_01matt_dinniman
+first_appearance: '27'
+occurrence_count: 1
+last_updated: '2026-01-30'
+---
+
+## Canonical Description
+
+A stemmed bowl, likely used for serving food, was found filled with cat food.
+
+## Location Type
+
+object
+
+## Environment
+
+- indoor

@@ -1,0 +1,30 @@
+---
+entity_type: location
+entity_id: loc_surface
+name: surface
+aliases: []
+sources:
+  - source_type: book
+    source_id: dungeon_crawler_carl_01matt_dinniman
+first_appearance: '30'
+occurrence_count: 1
+last_updated: '2026-01-30'
+---
+
+## Canonical Description
+
+The surface is a vast expanse of land that Carl encounters during his journey.
+
+## Location Type
+
+region
+
+## Environment
+
+- natural
+- open
+
+## Atmosphere
+
+- unpredictable
+- dynamic
