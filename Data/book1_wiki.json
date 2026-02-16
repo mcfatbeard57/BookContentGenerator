@@ -1,0 +1,149 @@
+{
+    "book": "Dungeon Crawler Carl (Book 1)",
+    "characters": [
+        {
+            "name": "Carl",
+            "description": "The titular protagonist. A former coast‑guardsman turned crawler, Carl and his ex‑girlfriend’s cat (Donut) become fan‑favorite contestants on the Syndicate gameshow Dungeon Crawler World:contentReference[oaicite:0]{index=0}."
+        },
+        {
+            "name": "Princess Donut",
+            "description": "A tortoiseshell Persian cat and the deuteragonist.  She has the highest total stat points in the party, so she becomes party leader and renames their group the \"Royal Court of Princess Donut.\"  She acquires the Enchanted Crown of the Sepsis Whore, which requires her to slay the entire Blood Sultanate royal family:contentReference[oaicite:1]{index=1}."
+        },
+        {
+            "name": "Mordecai",
+            "description": "An experienced former crawler who becomes a guide and commentator for Carl and Donut.  He often explains the dungeon mechanics and acts as mentor (description summarized from multiple wiki pages)."
+        },
+        {
+            "name": "Mongo",
+            "description": "A giant spider adopted by Donut near the end of the Second Floor.  Although Mongo’s adoption occurs in Book 2, his presence starts to influence the group in later chapters."
+        },
+        {
+            "name": "Cascadia",
+            "description": "One of the early crawlers listed in the character master list:contentReference[oaicite:2]{index=2}.  Specific details are scant, but she is part of the broader cast introduced in Book 1."
+        },
+        {
+            "name": "Cerberus",
+            "description": "A named character (possibly an NPC or mob) appearing in the character list:contentReference[oaicite:3]{index=3}.  Detailed background is not provided on the master list."
+        },
+        {
+            "name": "Chaco",
+            "description": "A character appearing in the early alphabetical portion of the character list:contentReference[oaicite:4]{index=4}.  He is mentioned without a detailed description."
+        },
+        {
+            "name": "Chin'Dua",
+            "description": "Another character from the master list:contentReference[oaicite:5]{index=5}.  Specific narrative role is not given in the category page."
+        }
+    ],
+    "locations_or_places": [
+        {
+            "name": "The World Dungeon",
+            "description": "An eighteen‑level maze created beneath Earth's surface after the Transformation.  It appears in Book 1 Chapter 2 and serves as the primary setting for the gameshow Dungeon Crawler World:contentReference[oaicite:6]{index=6}."
+        },
+        {
+            "name": "First Floor",
+            "description": "The tutorial floor accessed from surface‑level staircases after the Transformation.  It is a sprawling grid of passages and tunnels hewn from rock, split into unconnected sections so crawlers from different regions cannot interact:contentReference[oaicite:7]{index=7}."
+        },
+        {
+            "name": "Dungeon Entrance",
+            "description": "The stairway/ramp that appears in streets across Earth during the Transformation; Agatha is the first to go down voluntarily, demonstrating that the stairs can transform into a ramp for accessibility:contentReference[oaicite:8]{index=8}."
+        },
+        {
+            "name": "Desperado Club",
+            "description": "One of the dungeon’s notable locations; it appears in the trending page list of dungeon locations:contentReference[oaicite:9]{index=9}."
+        },
+        {
+            "name": "Larracos",
+            "description": "A location within the dungeon, listed among trending dungeon locations:contentReference[oaicite:10]{index=10}."
+        },
+        {
+            "name": "Club Vanquisher",
+            "description": "Another location in the dungeon, part of the trending locations list:contentReference[oaicite:11]{index=11}."
+        },
+        {
+            "name": "Grimaldi’s Traveling Circus",
+            "description": "A circus within the dungeon environment that becomes significant in later floors; it is mentioned in the trending locations list:contentReference[oaicite:12]{index=12}."
+        },
+        {
+            "name": "Zockau",
+            "description": "A dungeon location included in the trending list:contentReference[oaicite:13]{index=13}."
+        },
+        {
+            "name": "Abyss Station",
+            "description": "Another notable dungeon location from the trending list:contentReference[oaicite:14]{index=14}."
+        },
+        {
+            "name": "Personal Space",
+            "description": "A unique location inside the dungeon where crawlers can rest or regroup; it appears on the trending location list:contentReference[oaicite:15]{index=15}."
+        }
+    ],
+    "timeline_events": [
+        {
+            "event": "Transformation and emergence of the World Dungeon",
+            "book": 1,
+            "chapter": 2,
+            "description": "A global event called the Transformation causes massive stairways to appear across Earth, leading to the newly‑created World Dungeon.  The dungeon becomes the setting for the syndicated gameshow Dungeon Crawler World:contentReference[oaicite:16]{index=16}."
+        },
+        {
+            "event": "Carl and Donut enter the dungeon",
+            "book": 1,
+            "chapter": 1,
+            "description": "Following the Transformation, Carl and his ex‑girlfriend’s cat Donut descend into the World Dungeon, beginning their careers as crawlers on the gameshow (synthesized from book synopsis)."
+        },
+        {
+            "event": "Skull Empire referenced on Death Watch Extreme Dungeon Mayhem",
+            "book": 1,
+            "chapter": null,
+            "description": "During a broadcast of the in‑universe show Death Watch Extreme Dungeon Mayhem, Maestro claims the Skull Clan existed when the Syndicate created the crawl.  Zev notes that the Skull Empire is one of the largest and oldest Syndicate governments:contentReference[oaicite:17]{index=17}."
+        }
+    ],
+    "factions": [
+        {
+            "name": "Blood Sultanate",
+            "description": "A faction noted on the factions list.  It is a royal family targeted by Donut’s crown quest; the crown requires her to slay the entire Blood Sultanate royal family:contentReference[oaicite:19]{index=19}."
+        },
+        {
+            "name": "Bugbear",
+            "description": "A faction mentioned on the factions page’s list:contentReference[oaicite:20]{index=20}.  Specific description is not provided in the category, but Bugbears are likely a species or group encountered in the dungeon."
+        },
+        {
+            "name": "Burrowers",
+            "description": "Another faction listed among the factions.  Details are sparse in the category page, but they are one of the groups active within the dungeon world:contentReference[oaicite:21]{index=21}."
+        },
+        {
+            "name": "Dreadnoughts",
+            "description": "One of the factions listed on the factions page:contentReference[oaicite:22]{index=22}.  The Dreadnoughts are likely a military‑style group or team competing in Faction Wars."
+        },
+        {
+            "name": "Dream",
+            "description": "A faction appearing on the factions page:contentReference[oaicite:23]{index=23}.  Further details are not provided in the category summary."
+        },
+        {
+            "name": "Lemig Sortion",
+            "description": "A lesser‑known faction from the factions list:contentReference[oaicite:24]{index=24}."
+        },
+        {
+            "name": "Naga",
+            "description": "A faction or race listed among the factions:contentReference[oaicite:25]{index=25}.  The Nagas may represent a serpentine race within the dungeon."
+        },
+        {
+            "name": "Princess Posse",
+            "description": "A faction formed by Carl and Donut during the Ninth Floor Faction Wars.  It is sponsored by the Society for the Eradication of Cocker Spaniels and is co‑led by Carl and Princess Donut:contentReference[oaicite:26]{index=26}."
+        },
+        {
+            "name": "Prism Kingdom",
+            "description": "A faction included on the factions list:contentReference[oaicite:27]{index=27}.  Additional details are not given in the category."
+        },
+        {
+            "name": "Reavers",
+            "description": "A group from the factions page:contentReference[oaicite:28]{index=28}."
+        },
+        {
+            "name": "Skull Empire",
+            "description": "A monarchy run by King Rust.  In Book 1, Maestro claims the Skull Clan existed when the Syndicate created the crawl, and Zev compares the Skull Empire to a mega‑corporation, noting it is one of the largest and oldest Syndicate governments:contentReference[oaicite:29]{index=29}."
+        },
+        {
+            "name": "Viceroys",
+            "description": "A Syndicate race and government known for necromancy and horrific battlefield spells.  They regularly compete in the Ninth Floor Faction Wars as “The Madness”:contentReference[oaicite:30]{index=30}."
+        }
+    ]
+}

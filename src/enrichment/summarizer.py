@@ -1,4 +1,7 @@
-"""Canonical Summarizer - Generate LLM-ready descriptions via llama3.1"""
+"""Canonical Summarizer - Generate LLM-ready descriptions via llama3.1
+
+Instrumented with tracing, telemetry, and progress events.
+"""
 import re
 from datetime import date
 
@@ -54,7 +57,7 @@ def summarize_entity(
     
     # Build source contexts
     source_contexts = "\n\n".join(
-        f"- {ctx}" for ctx in resolved.contexts[:10]  # Limit to avoid context overflow
+        f"- {ctx}" for ctx in resolved.contexts[:50]  # Limit to avoid context overflow
     )
     
     if not source_contexts:
@@ -68,38 +71,59 @@ def summarize_entity(
         source_contexts=source_contexts,
     )
     
+    from src.observability.tracer import SpanContext
+    from src.observability import telemetry
+
     try:
-        # Call LLM with summarizer model
-        response = call_ollama(
-            prompt=prompt,
-            system_prompt=SUMMARIZER_SYSTEM_PROMPT,
-            model=SUMMARIZER_MODEL,
-        )
-        
-        parsed = parse_json_response(response)
-        
-        if not parsed:
-            print(f"Warning: Could not parse summarizer response for {resolved.canonical_name}")
-            return _create_minimal_entity(resolved, book_id)
-        
-        return _create_entity_from_summary(resolved, parsed, book_id)
-    
+        with SpanContext("summarize_entity", entity=resolved.canonical_name, type=entity_type):
+            response = call_ollama(
+                prompt=prompt,
+                system_prompt=SUMMARIZER_SYSTEM_PROMPT,
+                model=SUMMARIZER_MODEL,
+                call_type="summarization",
+            )
+
+            parsed = parse_json_response(response)
+
+            if not parsed:
+                telemetry.record_error("summarization", f"Parse failed for {resolved.canonical_name}")
+                print(f"Warning: Could not parse summarizer response for {resolved.canonical_name}")
+                return _create_minimal_entity(resolved, book_id)
+
+            telemetry.increment("entities_summarized")
+            return _create_entity_from_summary(resolved, parsed, book_id)
+
     except Exception as e:
+        telemetry.record_error("summarization", str(e))
         print(f"Warning: Summarization failed for {resolved.canonical_name}: {e}")
         return _create_minimal_entity(resolved, book_id)
 
 
-def _create_minimal_entity(resolved: ResolvedEntity, book_id: str) -> Entity:
-    """Create a minimal entity when summarization fails"""
+def _build_base_entity_kwargs(
+    resolved: ResolvedEntity,
+    book_id: str,
+    canonical_description: str | None = None,
+) -> dict:
+    """Build the shared keyword arguments for constructing any Entity subclass.
+
+    Args:
+        resolved: The resolved entity containing canonical name, aliases, etc.
+        book_id: Identifier of the source book.
+        canonical_description: Optional LLM-generated description.
+
+    Returns:
+        Dictionary of keyword arguments suitable for unpacking into any
+        Entity subclass constructor.
+    """
     entity_id = generate_entity_id(resolved.canonical_name, resolved.entity_type)
-    
+
     source = SourceReference(
         source_type="book",
         source_id=book_id,
         context=resolved.contexts[0] if resolved.contexts else None,
     )
-    
-    base_kwargs = {
+
+    return {
         "entity_id": entity_id,
         "name": resolved.canonical_name,
         "aliases": [n for n in resolved.all_names if n != resolved.canonical_name],
@@ -107,8 +131,24 @@ def _create_minimal_entity(resolved: ResolvedEntity, book_id: str) -> Entity:
         "first_appearance": resolved.source_chapters[0] if resolved.source_chapters else None,
         "occurrence_count": resolved.total_occurrences,
         "last_updated": date.today(),
-        "canonical_description": None,
+        "canonical_description": canonical_description,
     }
+
+
+def _create_minimal_entity(resolved: ResolvedEntity, book_id: str) -> Entity:
+    """Create a minimal entity when summarization fails.
+
+    Args:
+        resolved: The resolved entity to create a minimal version of.
+        book_id: Identifier of the source book.
+
+    Returns:
+        An Entity subclass instance with no LLM-generated enrichments.
+
+    Raises:
+        ValueError: If the entity type is not recognized.
+    """
+    base_kwargs = _build_base_entity_kwargs(resolved, book_id)
     
     if resolved.entity_type == "character":
         return Character(**base_kwargs)
@@ -127,25 +167,23 @@ def _create_entity_from_summary(
     summary: dict,
     book_id: str,
 ) -> Entity:
-    """Create entity from LLM summary response"""
-    entity_id = generate_entity_id(resolved.canonical_name, resolved.entity_type)
-    
-    source = SourceReference(
-        source_type="book",
-        source_id=book_id,
-        context=resolved.contexts[0] if resolved.contexts else None,
+    """Create a fully enriched entity from an LLM summary response.
+
+    Args:
+        resolved: The resolved entity with canonical name, aliases, etc.
+        summary: Parsed LLM response dict with type-specific fields.
+        book_id: Identifier of the source book.
+
+    Returns:
+        An Entity subclass instance enriched with summarized attributes.
+
+    Raises:
+        ValueError: If the entity type is not recognized.
+    """
+    base_kwargs = _build_base_entity_kwargs(
+        resolved, book_id,
+        canonical_description=summary.get("canonical_description"),
     )
-    
-    base_kwargs = {
-        "entity_id": entity_id,
-        "name": resolved.canonical_name,
-        "aliases": [n for n in resolved.all_names if n != resolved.canonical_name],
-        "sources": [source],
-        "first_appearance": resolved.source_chapters[0] if resolved.source_chapters else None,
-        "occurrence_count": resolved.total_occurrences,
-        "last_updated": date.today(),
-        "canonical_description": summary.get("canonical_description"),
-    }
     
     if resolved.entity_type == "character":
         return Character(
@@ -190,21 +228,37 @@ def _create_entity_from_summary(
 def summarize_all_entities(
     resolved_entities: list[ResolvedEntity],
     book_id: str,
+    batch_size: int | None = None,
 ) -> list[Entity]:
     """
     Generate canonical summaries for all resolved entities.
+    Emits progress events for each entity.
     """
+    from src.config import SUMMARIZER_BATCH_SIZE
+    from src.observability.progress import emit_progress, ProgressStage
+    from src.observability.tracer import SpanContext
+
+    if batch_size is None:
+        batch_size = SUMMARIZER_BATCH_SIZE
+
     entities: list[Entity] = []
-    
-    print(f"Generating canonical summaries for {len(resolved_entities)} entities...")
-    
-    for i, resolved in enumerate(resolved_entities):
-        print(f"  [{i + 1}/{len(resolved_entities)}] Summarizing: {resolved.canonical_name}")
-        
-        entity = summarize_entity(resolved, book_id)
-        if entity:
-            entities.append(entity)
-    
+    total = len(resolved_entities)
+
+    print(f"Generating canonical summaries for {total} entities...")
+
+    with SpanContext("summarize_all_entities", count=total):
+        for i, resolved in enumerate(resolved_entities):
+            emit_progress(
+                stage=ProgressStage.GENERATING_DESCRIPTIONS,
+                current=i + 1,
+                total=total,
+                message=f"Summarizing: {resolved.canonical_name}",
+            )
+
+            print(f"  [{i + 1}/{total}] Summarizing: {resolved.canonical_name}")
+            entity = summarize_entity(resolved, book_id)
+            if entity:
+                entities.append(entity)
+
     print(f"  → Generated {len(entities)} canonical entities")
-    
     return entities

@@ -1,0 +1,67 @@
+{
+  "book_id": "dungeon_crawler_carl_01matt_dinniman",
+  "book_title": "Dungeon Crawler Carl - 01",
+  "total_chapters": 57,
+  "completed_chapters": [
+    "Chapter 1",
+    "Chapter 2"
+  ],
+  "entities_extracted": [
+    {
+      "name": "Dungeon Crawler Carl",
+      "entity_type": "character",
+      "context": "Dungeon Crawler Carl - 01"
+    },
+    {
+      "name": "Matt Dinniman",
+      "entity_type": "character",
+      "context": "Copyright \u00a9 2020 by Matt Dinniman All rights reserved."
+    },
+    {
+      "name": "Cheryl Dyson",
+      "entity_type": "character",
+      "context": "Edited by Cheryl Dyson http://www .cheryldyson.com"
+    },
+    {
+      "name": "Elartwyne Estole",
+      "entity_type": "character",
+      "context": "Cover Illustration by Elartwyne Estole https:// www. artstation. com/ elartestole"
+    },
+    {
+      "name": "Toby Dinniman",
+      "entity_type": "character",
+      "context": "Cover Design by Toby Dinniman https:// www. collageorama.com"
+    },
+    {
+      "name": "Erik Wilson",
+      "entity_type": "character",
+      "context": "Interior Illustrations by Erik Wilson http:// www. erikwilsonartgallery.com/"
+    },
+    {
+      "name": "Donut Holes",
+      "entity_type": "faction",
+      "context": "especially those who have stuck with me through all the years. And I would like to toss out an extra-special thanks to all my Donut Holes over on Patreon."
+    },
+    {
+      "name": "Coliseum",
+      "entity_type": "location",
+      "context": "when the Coliseum falls, so will Rome"
+    },
+    {
+      "name": "Rome",
+      "entity_type": "location",
+      "context": "Rome will exist as long as the Coliseum does; when the Coliseum falls, so will Rome"
+    },
+    {
+      "name": "world",
+      "entity_type": "location",
+      "context": "when Rome falls, so will the world"
+    }
+  ],
+  "last_updated": "2026-02-16T13:22:51.059755",
+  "errors": [
+    "",
+    "",
+    ""
+  ]
+}

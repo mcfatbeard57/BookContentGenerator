@@ -10,8 +10,6 @@ dependencies = [
     "ruamel.yaml>=0.18",
     "orjson>=3.9",
     "rapidfuzz>=3.5",
-    "faiss-cpu>=1.7",
-    "networkx>=3.0",
     "httpx>=0.25",
 ]
 

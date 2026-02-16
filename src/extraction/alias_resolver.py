@@ -1,4 +1,7 @@
-"""Alias Resolver - LLM-based primary with fuzzy matching fallback"""
+"""Alias Resolver - LLM-based primary with fuzzy matching fallback
+
+Instrumented with tracing, decision logging, and telemetry.
+"""
 import json
 import re
 from dataclasses import dataclass, field
@@ -22,7 +25,17 @@ from src.extraction.prompts import (
 
 @dataclass
 class ResolvedEntity:
-    """Entity after alias resolution with canonical name"""
+    """Entity after alias resolution with a single canonical name.
+
+    Attributes:
+        canonical_name: The chosen primary name.
+        all_names: All known names including canonical and aliases.
+        entity_type: Entity category (character, location, etc.).
+        contexts: Source text contexts collected from each occurrence.
+        source_chapters: Chapters where this entity appeared.
+        source_book: Title of the source book.
+        total_occurrences: Sum of occurrence counts across all raw entities.
+    """
     
     canonical_name: str
     all_names: list[str]  # includes canonical + all aliases
@@ -35,7 +48,13 @@ class ResolvedEntity:
 
 @dataclass
 class AliasGroup:
-    """Group of names that refer to the same entity"""
+    """Group of names that refer to the same entity.
+
+    Attributes:
+        canonical_name: Chosen primary name for the group.
+        aliases: Other names in the group.
+        confidence: Confidence score (0–1) of the grouping.
+    """
     
     canonical_name: str
     aliases: list[str]
@@ -47,10 +66,17 @@ def resolve_aliases_llm(
     entity_type: str,
     book_title: str,
 ) -> list[AliasGroup]:
-    """
-    Use LLM to group names that refer to the same entity.
-    
-    Primary method for alias resolution.
+    """Use LLM to group names that refer to the same entity.
+
+    Primary method for alias resolution. Falls back gracefully on failure.
+
+    Args:
+        names: List of entity name strings to group.
+        entity_type: The entity category (e.g. ``"character"``).
+        book_title: Title of the source book, for LLM context.
+
+    Returns:
+        List of ``AliasGroup`` instances. May be empty if the LLM fails.
     """
     if len(names) <= 1:
         return [AliasGroup(canonical_name=names[0], aliases=[], confidence=1.0)] if names else []
@@ -91,10 +117,17 @@ def resolve_aliases_llm(
 
 
 def resolve_aliases_fuzzy(names: list[str], threshold: int = FUZZY_MATCH_THRESHOLD) -> list[AliasGroup]:
-    """
-    Use fuzzy string matching to group similar names.
-    
-    Fallback method - more conservative than LLM.
+    """Group similar names using fuzzy string matching.
+
+    Conservative fallback when the LLM method fails or is disabled.
+    Uses token-sort ratio from ``rapidfuzz``.
+
+    Args:
+        names: List of entity name strings to group.
+        threshold: Minimum fuzzy-match score (0–100) to consider a match.
+
+    Returns:
+        List of ``AliasGroup`` instances covering all input names.
     """
     if len(names) <= 1:
         return [AliasGroup(canonical_name=names[0], aliases=[], confidence=1.0)] if names else []
@@ -145,8 +178,15 @@ def merge_entities_by_alias_groups(
     entities: list[RawEntity],
     groups: list[AliasGroup],
 ) -> list[ResolvedEntity]:
-    """
-    Merge raw entities based on alias groups.
+    """Merge raw entities into resolved entities based on alias groups.
+
+    Args:
+        entities: Raw entities to merge.
+        groups: Alias groups mapping names to canonical names.
+
+    Returns:
+        List of ``ResolvedEntity`` with merged aliases, contexts,
+        and aggregated occurrence counts.
     """
     # Build lookup: name -> canonical name
     name_to_canonical: dict[str, str] = {}
@@ -206,60 +246,85 @@ def resolve_entities(
     book_title: str,
     use_llm: bool = True,
 ) -> list[ResolvedEntity]:
-    """
-    Resolve entity aliases using hybrid approach:
-    1. Primary: LLM-based alias grouping
-    2. Fallback: Fuzzy string matching for any missed groups
-    
+    """Resolve entity aliases using a hybrid approach.
+
+    1. Primary: LLM-based alias grouping per entity type.
+    2. Fallback: Fuzzy string matching for any unresolved names.
+
+    Instrumented with tracing and decision logging.
+
     Args:
-        entities: Raw entities from extraction
-        book_title: Book title for context
-        use_llm: Whether to use LLM (disable for testing)
-    
+        entities: All raw entities extracted from the book.
+        book_title: Title of the source book (passed to the LLM).
+        use_llm: If True, try LLM resolution first.
+
     Returns:
-        List of resolved entities with merged aliases
+        Fully resolved entities with canonical names and merged metadata.
     """
-    # Group entities by type
-    by_type: dict[str, list[RawEntity]] = {}
-    for entity in entities:
-        if entity.entity_type not in by_type:
-            by_type[entity.entity_type] = []
-        by_type[entity.entity_type].append(entity)
-    
-    all_resolved: list[ResolvedEntity] = []
-    
-    for entity_type, type_entities in by_type.items():
-        print(f"  Resolving aliases for {len(type_entities)} {entity_type} entities...")
-        
-        # Get all names
-        all_names = set()
-        for entity in type_entities:
-            all_names.add(entity.name)
-            all_names.update(entity.aliases)
-        
-        names_list = list(all_names)
-        
-        # Primary: LLM resolution
-        groups: list[AliasGroup] = []
-        if use_llm and len(names_list) > 1:
-            groups = resolve_aliases_llm(names_list, entity_type, book_title)
-        
-        # Track which names are resolved
-        resolved_names = set()
-        for group in groups:
-            resolved_names.add(group.canonical_name)
-            resolved_names.update(group.aliases)
-        
-        # Fallback: Fuzzy matching for unresolved names
-        unresolved = [n for n in names_list if n not in resolved_names]
-        if unresolved:
-            fuzzy_groups = resolve_aliases_fuzzy(unresolved)
-            groups.extend(fuzzy_groups)
-        
-        # Merge entities
-        resolved = merge_entities_by_alias_groups(type_entities, groups)
-        all_resolved.extend(resolved)
-        
-        print(f"    → {len(resolved)} resolved entities after alias merging")
-    
-    return all_resolved
+    from src.observability.tracer import SpanContext, log_decision
+    from src.observability import telemetry
+
+    with SpanContext("alias_resolution", entity_count=len(entities)):
+        # Group entities by type
+        by_type: dict[str, list[RawEntity]] = {}
+        for entity in entities:
+            if entity.entity_type not in by_type:
+                by_type[entity.entity_type] = []
+            by_type[entity.entity_type].append(entity)
+
+        all_resolved: list[ResolvedEntity] = []
+
+        for entity_type, type_entities in by_type.items():
+            print(f"  Resolving aliases for {len(type_entities)} {entity_type} entities...")
+
+            # Get all names
+            all_names = set()
+            for entity in type_entities:
+                all_names.add(entity.name)
+                all_names.update(entity.aliases)
+
+            names_list = list(all_names)
+
+            # Primary: LLM resolution
+            groups: list[AliasGroup] = []
+            method_used = "none"
+            if use_llm and len(names_list) > 1:
+                groups = resolve_aliases_llm(names_list, entity_type, book_title)
+                method_used = "llm" if groups else "fuzzy_fallback"
+
+            # Track which names are resolved
+            resolved_names = set()
+            for group in groups:
+                resolved_names.add(group.canonical_name)
+                resolved_names.update(group.aliases)
+
+            # Fallback: Fuzzy matching for unresolved names
+            unresolved = [n for n in names_list if n not in resolved_names]
+            if unresolved:
+                fuzzy_groups = resolve_aliases_fuzzy(unresolved)
+                groups.extend(fuzzy_groups)
+                if not use_llm or method_used == "fuzzy_fallback":
+                    method_used = "fuzzy"
+
+            # Log the resolution method decision
+            log_decision(
+                category="alias_resolution",
+                options_considered=["llm", "fuzzy", "none"],
+                option_chosen=method_used,
+                reason=f"{len(names_list)} names for {entity_type}, "
+                       f"{len(groups)} groups formed, "
+                       f"{len(unresolved)} fell through to fuzzy",
+                constraints=[f"use_llm={use_llm}"],
+                entity_type=entity_type,
+                names_count=len(names_list),
+                groups_count=len(groups),
+            )
+
+            # Merge entities
+            resolved = merge_entities_by_alias_groups(type_entities, groups)
+            all_resolved.extend(resolved)
+
+            telemetry.increment("entities_resolved", len(resolved))
+            print(f"    → {len(resolved)} resolved entities after alias merging")
+
+        return all_resolved
