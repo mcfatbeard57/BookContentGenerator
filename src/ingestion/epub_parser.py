@@ -12,8 +12,15 @@ from ebooklib import epub
 
 @dataclass
 class Chapter:
-    """Represents a chapter extracted from an EPUB"""
-    
+    """Represents a chapter extracted from an EPUB.
+
+    Attributes:
+        index: Zero-based position of the chapter in the book.
+        title: Chapter title (extracted or auto-generated).
+        content: Plain text content, whitespace-normalized.
+        word_count: Number of words in ``content``.
+    """
+
     index: int
     title: str
     content: str  # plain text, normalized
@@ -22,32 +29,46 @@ class Chapter:
 
 @dataclass
 class ParsedBook:
-    """Represents a fully parsed EPUB book"""
-    
+    """Represents a fully parsed EPUB book.
+
+    Attributes:
+        file_path: Filesystem path to the source EPUB.
+        title: Book title from EPUB metadata.
+        author: Author name from EPUB metadata.
+        book_id: Deterministic slug derived from title + author.
+        content_hash: SHA-256 digest of all chapter content.
+        chapters: Ordered list of parsed chapters.
+    """
+
     file_path: Path
     title: str
     author: str
     book_id: str  # normalized slug
     content_hash: str  # SHA256 of full text
     chapters: list[Chapter]
-    
+
     @property
     def full_text(self) -> str:
-        """Concatenate all chapter content"""
+        """Concatenate all chapter content into a single string."""
         return "\n\n".join(ch.content for ch in self.chapters)
-    
+
     @property
     def total_words(self) -> int:
-        """Total word count across all chapters"""
+        """Total word count across all chapters."""
         return sum(ch.word_count for ch in self.chapters)
 
 
 def normalize_text(text: str) -> str:
-    """
-    Normalize text for consistent processing:
-    - Unicode normalization (NFC)
-    - Collapse multiple whitespace
-    - Strip leading/trailing whitespace
+    """Normalize text by collapsing whitespace and normalizing unicode.
+
+    Applies NFC unicode normalization, collapses runs of whitespace to
+    single spaces (preserving paragraph breaks), and strips edges.
+
+    Args:
+        text: Raw text string to normalize.
+
+    Returns:
+        Cleaned text with consistent whitespace and NFC-normalized unicode.
     """
     # Unicode normalize
     text = unicodedata.normalize("NFC", text)
@@ -65,11 +86,16 @@ def normalize_text(text: str) -> str:
 
 
 def html_to_text(html_content: str) -> str:
-    """
-    Convert HTML content to plain text:
-    - Extract text using BeautifulSoup
-    - Preserve paragraph structure
-    - Remove navigation/metadata
+    """Convert HTML content to paragraph-separated plain text.
+
+    Strips script/style/nav elements and extracts text from block-level
+    elements, preserving paragraph structure.
+
+    Args:
+        html_content: Raw HTML string from an EPUB document.
+
+    Returns:
+        Plain text with paragraphs separated by double newlines.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     
@@ -92,7 +118,18 @@ def html_to_text(html_content: str) -> str:
 
 
 def extract_chapter_title(item: epub.EpubItem, index: int) -> str:
-    """Extract chapter title from EPUB item or generate one"""
+    """Extract chapter title from an EPUB item.
+
+    Tries the item's ``title`` attribute, then heading tags (h1-h3),
+    then falls back to ``Chapter {index + 1}``.
+
+    Args:
+        item: An ``EpubItem`` with HTML content.
+        index: Zero-based chapter index (used for fallback title).
+
+    Returns:
+        Extracted or generated chapter title string.
+    """
     # Try to get title from item
     if hasattr(item, "title") and item.title:
         return item.title
@@ -114,7 +151,15 @@ def extract_chapter_title(item: epub.EpubItem, index: int) -> str:
 
 
 def generate_book_id(title: str, author: str) -> str:
-    """Generate a normalized book ID from title and author"""
+    """Generate a deterministic, URL-safe book ID from title and author.
+
+    Args:
+        title: Book title.
+        author: Author name.
+
+    Returns:
+        Lowercase slug of the form ``title_author``, max 50 chars.
+    """
     # Combine title and author
     combined = f"{title}_{author}".lower()
     
@@ -129,19 +174,31 @@ def generate_book_id(title: str, author: str) -> str:
 
 
 def compute_content_hash(text: str) -> str:
-    """Compute SHA256 hash of text content"""
+    """Compute SHA-256 hex digest of text content.
+
+    Args:
+        text: The text to hash.
+
+    Returns:
+        Full-length SHA-256 hex digest string.
+    """
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def parse_epub(file_path: Path | str) -> ParsedBook:
-    """
-    Parse an EPUB file and extract structured content.
-    
+    """Parse an EPUB file and extract structured content.
+
+    Handles missing metadata, empty chapters, and malformed HTML.
+
     Args:
-        file_path: Path to the EPUB file
-        
+        file_path: Filesystem path to the ``.epub`` file.
+
     Returns:
-        ParsedBook with chapters, metadata, and content hash
+        ParsedBook with extracted chapters, metadata, and content hash.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file is not an ``.epub``.
     """
     file_path = Path(file_path)
     

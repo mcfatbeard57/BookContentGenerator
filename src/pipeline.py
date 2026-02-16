@@ -1,224 +1,344 @@
-"""Pipeline - Main orchestrator for the corpus builder"""
-import argparse
-import sys
+"""Book Content Pipeline - Simplified
+
+Book → Chunk → LLM → NER → Connections/Clusters → output JSON
+
+Fully instrumented with:
+- Progress events (Layer 3)
+- Idempotency (Layer 5) 
+- Traceability (Layer 7)
+- Telemetry
+"""
+import json
 from datetime import datetime
 from pathlib import Path
 
-from src.config import CORPUS_DIR, DATA_DIR
-from src.corpus.graph_builder import build_graph, load_graph, save_graph
-from src.corpus.writer import write_all_entities
+from src.config import CORPUS_METADATA_DIR, OUTPUT_DIR
 from src.enrichment.summarizer import summarize_all_entities
 from src.extraction.alias_resolver import resolve_entities
+from src.extraction.connections import build_connections
 from src.extraction.ner_extractor import extract_entities_from_book
-from src.ingestion.epub_parser import parse_epub, ParsedBook
-from src.ingestion.registry import (
-    create_book_record,
-    load_registry,
-    save_registry,
-    IngestionRegistry,
+from src.ingestion.epub_parser import parse_epub
+from src.observability.progress import (
+    ProgressStage,
+    emit_progress,
+    reset_progress,
+    save_progress_log,
 )
-from src.rag.index import build_entity_index, load_or_create_index
+from src.observability.tracer import (
+    SpanContext,
+    end_trace,
+    save_trace,
+    start_trace,
+)
+from src.observability import telemetry
 
 
-def process_book(
-    book_path: Path,
-    registry: IngestionRegistry,
-    skip_if_processed: bool = True,
-) -> tuple[list, bool]:
-    """
-    Process a single book through the full pipeline.
-    
+def _query_model_versions() -> dict[str, str]:
+    """Query Ollama for exact model digests.
+
+    Used for replayability — records which model version produced
+    each result.
+
     Returns:
-        Tuple of (entities list, was_processed bool)
+        Dict mapping model name to truncated digest string.
     """
-    print(f"\n{'=' * 60}")
-    print(f"Processing: {book_path.name}")
-    print(f"{'=' * 60}")
-    
-    # Step 1: Parse EPUB
-    print("\n[1/6] Parsing EPUB...")
-    parsed_book = parse_epub(book_path)
-    print(f"  → Title: {parsed_book.title}")
-    print(f"  → Author: {parsed_book.author}")
-    print(f"  → Chapters: {len(parsed_book.chapters)}")
-    print(f"  → Words: {parsed_book.total_words:,}")
-    print(f"  → Hash: {parsed_book.content_hash[:16]}...")
-    
-    # Step 2: Check if already processed
-    if skip_if_processed and registry.is_processed(parsed_book.content_hash):
-        existing = registry.get_record_by_hash(parsed_book.content_hash)
-        print(f"\n  ⏭ Book already processed on {existing.processed_at}")
-        print(f"    Entities extracted: {existing.entities_extracted}")
-        return [], False
-    
-    # Step 3: Extract entities
-    print("\n[2/6] Extracting entities...")
-    extraction_result = extract_entities_from_book(parsed_book)
-    print(f"  → Found {len(extraction_result.entities)} raw entities")
-    if extraction_result.errors:
-        print(f"  → Errors: {len(extraction_result.errors)}")
-    
-    # Step 4: Resolve aliases
-    print("\n[3/6] Resolving aliases...")
-    resolved_entities = resolve_entities(
-        extraction_result.entities,
-        parsed_book.title,
-        use_llm=True,
-    )
-    print(f"  → Resolved to {len(resolved_entities)} unique entities")
-    
-    # Step 5: Generate canonical summaries
-    print("\n[4/6] Generating canonical summaries...")
-    canonical_entities = summarize_all_entities(resolved_entities, parsed_book.book_id)
-    
-    # Step 6: Record in registry
-    record = create_book_record(
-        book_id=parsed_book.book_id,
-        file_path=book_path,
-        content_hash=parsed_book.content_hash,
-        title=parsed_book.title,
-        author=parsed_book.author,
-        chapter_count=len(parsed_book.chapters),
-        word_count=parsed_book.total_words,
-    )
-    record.entities_extracted = len(canonical_entities)
-    registry.add_record(record)
-    
-    return canonical_entities, True
+    import httpx
+    from src.config import NER_MODEL, OLLAMA_BASE_URL, SUMMARIZER_MODEL
+    from src.observability.tracer import record_model_version
+
+    versions = {}
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            if resp.status_code == 200:
+                for model in resp.json().get("models", []):
+                    name = model.get("name", "")
+                    digest = model.get("digest", "")[:12]
+                    versions[name] = digest
+                    record_model_version(name, digest)
+    except Exception:
+        pass  # Non-critical: best-effort version recording
+
+    return versions
 
 
-def run_pipeline(
-    input_paths: list[Path],
-    force_reprocess: bool = False,
-) -> None:
+def run_pipeline(epub_path: str | Path) -> Path:
     """
-    Run the full pipeline on input books.
+    Run the simplified content extraction pipeline.
+    
+    Book → Chunk → LLM → NER → Connections → JSON
     
     Args:
-        input_paths: List of EPUB file paths
-        force_reprocess: If True, reprocess even already-processed books
+        epub_path: Path to the EPUB file to process
+        
+    Returns:
+        Path to the output JSON file
     """
-    start_time = datetime.now()
+    epub_path = Path(epub_path)
     
-    print("\n" + "=" * 60)
-    print("📚 Book → Canonical Corpus Builder")
-    print("=" * 60)
-    print(f"Input files: {len(input_paths)}")
-    print(f"Force reprocess: {force_reprocess}")
+    # Reset state
+    reset_progress()
+    telemetry.reset_telemetry()
+    telemetry.start_timer("pipeline_total")
     
-    # Load existing state
-    print("\nLoading existing state...")
-    registry = load_registry()
-    print(f"  → {len(registry.processed_books)} books in registry")
-    
-    graph = load_graph()
-    print(f"  → {len(graph.nodes)} nodes, {len(graph.edges)} edges in graph")
-    
-    # Process each book
-    all_entities = []
-    books_processed = 0
-    
-    for book_path in input_paths:
-        if not book_path.exists():
-            print(f"\nWarning: File not found: {book_path}")
-            continue
-        
-        entities, was_processed = process_book(
-            book_path,
-            registry,
-            skip_if_processed=not force_reprocess,
-        )
-        
-        if was_processed:
-            all_entities.extend(entities)
-            books_processed += 1
-    
-    if not all_entities:
-        print("\n✅ No new entities to process.")
-        if books_processed == 0:
-            print("   All books were already processed. Use --force to reprocess.")
-        return
-    
-    # Write corpus files
-    print(f"\n[5/6] Writing corpus files...")
-    written_paths = write_all_entities(all_entities)
-    
-    # Update graph
-    print(f"\n[6/6] Updating knowledge graph...")
-    for entity in all_entities:
-        from src.corpus.graph_builder import add_entity_to_graph
-        add_entity_to_graph(graph, entity)
-    
-    # Infer relationships
-    from src.corpus.graph_builder import infer_relationships
-    for record in registry.processed_books.values():
-        infer_relationships(graph, all_entities, record.book_id)
-    
-    # Save everything
-    print("\nSaving state...")
-    save_registry(registry)
-    print("  → Registry saved")
-    
-    save_graph(graph)
-    print("  → Graph saved")
-    
-    # Build/update embeddings index
-    print("\nBuilding embeddings index...")
-    try:
-        entity_index = build_entity_index(all_entities)
-        entity_index.save()
-        print("  → Index saved")
-    except Exception as e:
-        print(f"  → Warning: Could not build index: {e}")
-    
-    # Summary
-    elapsed = datetime.now() - start_time
-    print("\n" + "=" * 60)
-    print("✅ Pipeline Complete")
-    print("=" * 60)
-    print(f"Books processed: {books_processed}")
-    print(f"Entities created: {len(all_entities)}")
-    print(f"Files written: {len(written_paths)}")
-    print(f"Graph nodes: {len(graph.nodes)}")
-    print(f"Graph edges: {len(graph.edges)}")
-    print(f"Time elapsed: {elapsed}")
-    print(f"\nCorpus location: {CORPUS_DIR}")
+    # Start trace
+    trace_id = start_trace(metadata={
+        "epub_path": str(epub_path),
+        "started_at": datetime.now().isoformat(),
+    })
 
+    model_versions = _query_model_versions()
+
+    print(f"\n{'='*60}")
+    print(f"📚 Book Content Pipeline")
+    print(f"{'='*60}")
+    print(f"Input: {epub_path.name}")
+    print(f"Trace: {trace_id}")
+    print()
+
+    try:
+        # ── Step 1: Parse EPUB ─────────────────────────────────────
+        emit_progress(
+            stage=ProgressStage.LOADING_BOOK,
+            current=0, total=6,
+            message=f"Loading {epub_path.name}",
+        )
+
+        with SpanContext("parse_epub", file=epub_path.name):
+            book = parse_epub(str(epub_path))
+
+        emit_progress(
+            stage=ProgressStage.ANALYZING_STRUCTURE,
+            current=1, total=6,
+            message=f"Found {len(book.chapters)} chapters, {book.total_words:,} words",
+        )
+        print(f"📖 Parsed: {book.title} by {book.author}")
+        print(f"   {len(book.chapters)} chapters, {book.total_words:,} words\n")
+
+        # ── Step 2 & 3: Chunk + LLM NER ───────────────────────────
+        emit_progress(
+            stage=ProgressStage.EXTRACTING_CHARACTERS_AND_ENTITIES,
+            current=2, total=6,
+            message="Extracting entities via NER",
+        )
+
+        with SpanContext("entity_extraction"):
+            extraction_result = extract_entities_from_book(book)
+
+        telemetry.increment("chapters_processed", extraction_result.chapters_processed)
+        print()
+
+        # ── Step 4: Alias Resolution ───────────────────────────────
+        emit_progress(
+            stage=ProgressStage.RESOLVING_DUPLICATE_NAMES,
+            current=3, total=6,
+            message=f"Resolving aliases for {len(extraction_result.entities)} entities",
+        )
+
+        with SpanContext("alias_resolution"):
+            resolved_entities = resolve_entities(
+                extraction_result.entities,
+                book.title,
+            )
+
+        print(f"\n✅ Resolved to {len(resolved_entities)} unique entities\n")
+
+        # ── Step 5: Summarization ──────────────────────────────────
+        emit_progress(
+            stage=ProgressStage.GENERATING_DESCRIPTIONS,
+            current=4, total=6,
+            message=f"Generating descriptions for {len(resolved_entities)} entities",
+        )
+
+        with SpanContext("summarization"):
+            summarized_entities = summarize_all_entities(
+                resolved_entities,
+                book.book_id,
+            )
+
+        print()
+
+        # ── Step 6: Connection Clustering ──────────────────────────
+        emit_progress(
+            stage=ProgressStage.BUILDING_CONNECTIONS,
+            current=5, total=6,
+            message="Building entity connections from co-occurrence",
+        )
+
+        with SpanContext("connection_clustering"):
+            connections = build_connections(
+                extraction_result.entity_chunk_map,
+                min_weight=2,  # At least 2 co-occurrences
+            )
+
+        print(f"🔗 Built {len(connections)} connections\n")
+
+        # ── Step 7: Output JSON ────────────────────────────────────
+        emit_progress(
+            stage=ProgressStage.WRITING_OUTPUT,
+            current=6, total=6,
+            message="Writing output JSON",
+        )
+
+        output_path = _write_output_json(
+            book=book,
+            entities=summarized_entities,
+            connections=connections,
+            trace_id=trace_id,
+            model_versions=model_versions,
+        )
+
+        # ── Done ──────────────────────────────────────────────────
+        telemetry.stop_timer("pipeline_total")
+
+        emit_progress(
+            stage=ProgressStage.COMPLETE,
+            current=6, total=6,
+            message=f"Output: {output_path.name}",
+        )
+
+        # Save observability artifacts
+        emit_progress(
+            stage=ProgressStage.SAVING_STATE,
+            current=6, total=6,
+            message="Saving traces and telemetry",
+            quiet=True,
+        )
+
+        trace = end_trace()
+        save_trace(trace)
+        save_progress_log(trace_id)
+        telemetry.save_telemetry(trace_id)
+
+        _print_summary(output_path, summarized_entities, connections, trace_id)
+
+        return output_path
+
+    except Exception as e:
+        telemetry.record_error("pipeline", str(e), fatal=True)
+        telemetry.stop_timer("pipeline_total")
+
+        trace = end_trace()
+        if trace:
+            save_trace(trace)
+        save_progress_log(trace_id)
+        telemetry.save_telemetry(trace_id)
+
+        raise
+
+
+def _write_output_json(
+    book,
+    entities: list,
+    connections: list,
+    trace_id: str,
+    model_versions: dict,
+) -> Path:
+    """Serialize pipeline results to a JSON file.
+
+    Args:
+        book: The parsed book (provides metadata).
+        entities: Enriched entity instances.
+        connections: Connection objects.
+        trace_id: Active trace identifier.
+        model_versions: Model name → digest mapping.
+
+    Returns:
+        Path to the written JSON file.
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUT_DIR / f"{book.book_id}_result.json"
+
+    # Build entity dicts
+    entity_dicts = [entity.to_output_dict() for entity in entities]
+
+    output_data = {
+        "metadata": {
+            "book_id": book.book_id,
+            "title": book.title,
+            "author": book.author,
+            "trace_id": trace_id,
+            "processed_at": datetime.now().isoformat(),
+            "model_versions": model_versions,
+            "chapters": len(book.chapters),
+            "word_count": book.total_words,
+        },
+        "entities": entity_dicts,
+        "connections": [c.to_dict() for c in connections],
+        "telemetry": telemetry.get_summary(),
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(output_data, f, indent=2, default=str)
+
+    print(f"💾 Output: {output_path}")
+    return output_path
+
+
+def _print_summary(
+    output_path: Path,
+    entities: list,
+    connections: list,
+    trace_id: str,
+) -> None:
+    """Print a human-readable pipeline completion summary.
+
+    Args:
+        output_path: Path to the output JSON.
+        entities: Final entity list.
+        connections: Connection list.
+        trace_id: Trace identifier.
+    """
+    summary = telemetry.get_summary()
+
+    print(f"\n{'='*60}")
+    print(f"✅ Pipeline Complete")
+    print(f"{'='*60}")
+    print(f"  Output:      {output_path}")
+    print(f"  Entities:    {len(entities)}")
+    print(f"  Connections: {len(connections)}")
+    print(f"  Duration:    {summary['duration_s']:.1f}s")
+    print(f"  LLM Calls:   {summary['llm_calls']}")
+    print(f"  Tokens:      {summary['tokens_prompt'] + summary['tokens_completion']:,}")
+    print(f"  Errors:      {summary['errors']}")
+    print(f"  Trace ID:    {trace_id}")
+    print(f"{'='*60}\n")
+
+
+# =============================================================================
+# CLI
+# =============================================================================
 
 def main():
     """CLI entry point"""
+    import argparse
+
     parser = argparse.ArgumentParser(
-        description="Book → Canonical Corpus Builder",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Book Content Pipeline: Extract entities and connections from EPUB files"
     )
-    
     parser.add_argument(
-        "--input", "-i",
+        "epub_path",
         type=Path,
-        nargs="+",
-        help="EPUB file(s) to process. If not specified, processes all EPUBs in Data/",
+        help="Path to the EPUB file to process",
     )
-    
     parser.add_argument(
-        "--force", "-f",
+        "--clear-cache",
         action="store_true",
-        help="Force reprocessing of already-processed books",
+        help="Clear idempotency cache before running",
     )
-    
+
     args = parser.parse_args()
-    
-    # Determine input files
-    if args.input:
-        input_paths = args.input
-    else:
-        # Default: all EPUBs in Data directory
-        input_paths = list(DATA_DIR.glob("*.epub"))
-        if not input_paths:
-            print(f"No EPUB files found in {DATA_DIR}")
-            sys.exit(1)
-    
-    # Run pipeline
-    run_pipeline(input_paths, force_reprocess=args.force)
+
+    if args.clear_cache:
+        from src.observability.idempotency import clear_all
+        clear_all()
+
+    if not args.epub_path.exists():
+        print(f"Error: File not found: {args.epub_path}")
+        return
+
+    output_path = run_pipeline(args.epub_path)
+    print(f"Done! Output: {output_path}")
 
 
 if __name__ == "__main__":

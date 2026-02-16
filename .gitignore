@@ -52,9 +52,11 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
-# FAISS index (can be regenerated)
-corpus/graph/entity_index.faiss
-corpus/graph/index_metadata.json
+# Pipeline output (regenerated)
+output/
+
+# Corpus (all generated content)
+corpus/
 
 # Local config overrides
 .env
@@ -63,3 +65,6 @@ corpus/graph/index_metadata.json
 # Logs
 *.log
 logs/
+
+# Data files (large, not tracked)
+Data/

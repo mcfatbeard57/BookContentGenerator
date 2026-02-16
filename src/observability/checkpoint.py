@@ -10,7 +10,17 @@ from src.config import CHECKPOINT_FILE, CHECKPOINT_INTERVAL
 
 @dataclass
 class ExtractionCheckpoint:
-    """Checkpoint state for extraction process"""
+    """Checkpoint state for an in-progress extraction.
+
+    Attributes:
+        book_id: Deterministic book slug.
+        book_title: Human-readable book title.
+        total_chapters: Number of chapters in the book.
+        completed_chapters: Chapter titles already processed.
+        entities_extracted: Accumulated entity dicts.
+        last_updated: ISO-8601 timestamp of last save.
+        errors: Error messages recorded during extraction.
+    """
     
     book_id: str
     book_title: str
@@ -35,7 +45,14 @@ class ExtractionCheckpoint:
 
 
 def load_checkpoint(book_id: str) -> ExtractionCheckpoint | None:
-    """Load existing checkpoint for a book"""
+    """Load an existing checkpoint for a book.
+
+    Args:
+        book_id: Book slug to look up.
+
+    Returns:
+        The saved checkpoint, or ``None`` if none exists or IDs don't match.
+    """
     if not CHECKPOINT_FILE.exists():
         return None
     
@@ -52,7 +69,11 @@ def load_checkpoint(book_id: str) -> ExtractionCheckpoint | None:
 
 
 def save_checkpoint(checkpoint: ExtractionCheckpoint) -> None:
-    """Save checkpoint to disk"""
+    """Persist checkpoint to disk.
+
+    Args:
+        checkpoint: The checkpoint to save.
+    """
     checkpoint.last_updated = datetime.now().isoformat()
     CHECKPOINT_FILE.parent.mkdir(parents=True, exist_ok=True)
     
@@ -63,14 +84,21 @@ def save_checkpoint(checkpoint: ExtractionCheckpoint) -> None:
 
 
 def clear_checkpoint() -> None:
-    """Clear checkpoint after successful completion"""
+    """Delete the checkpoint file after successful completion."""
     if CHECKPOINT_FILE.exists():
         CHECKPOINT_FILE.unlink()
         print("  ✓ Checkpoint cleared")
 
 
 def should_save_checkpoint(chapters_completed: int) -> bool:
-    """Check if we should save a checkpoint"""
+    """Check whether we should save a checkpoint at this chapter count.
+
+    Args:
+        chapters_completed: Number of chapters done so far.
+
+    Returns:
+        True if ``chapters_completed`` is a multiple of ``CHECKPOINT_INTERVAL``.
+    """
     return chapters_completed > 0 and chapters_completed % CHECKPOINT_INTERVAL == 0
 
 
@@ -121,7 +149,14 @@ class CheckpointManager:
         return False
     
     def is_chapter_done(self, chapter_title: str) -> bool:
-        """Check if chapter already processed"""
+        """Check whether a chapter has already been processed.
+
+        Args:
+            chapter_title: Title to look up.
+
+        Returns:
+            True if already in ``completed_chapters``.
+        """
         return chapter_title in self.checkpoint.completed_chapters
     
     def mark_complete(
@@ -129,7 +164,12 @@ class CheckpointManager:
         chapter_title: str,
         entities: list[dict],
     ) -> None:
-        """Mark chapter as complete and optionally save checkpoint"""
+        """Mark a chapter as complete and save checkpoint at intervals.
+
+        Args:
+            chapter_title: Title of the completed chapter.
+            entities: Entity dicts extracted from this chapter.
+        """
         self.checkpoint.completed_chapters.append(chapter_title)
         self.checkpoint.entities_extracted.extend(entities)
         
@@ -138,7 +178,7 @@ class CheckpointManager:
             save_checkpoint(self.checkpoint)
     
     def get_all_entities(self) -> list[dict]:
-        """Get all extracted entities"""
+        """Return all extracted entities accumulated so far."""
         return self.checkpoint.entities_extracted
     
     @property

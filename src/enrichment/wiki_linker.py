@@ -6,13 +6,16 @@ from typing import Literal
 from rapidfuzz import fuzz
 
 from src.config import (
-    CORPUS_CHARACTERS_DIR,
-    CORPUS_FACTIONS_DIR,
-    CORPUS_LOCATIONS_DIR,
-    CORPUS_TIMELINE_DIR,
+    CORPUS_DIR,
     FUZZY_MATCH_THRESHOLD,
     WIKI_JSON_PATH,
 )
+
+# Derive corpus subdirectories from CORPUS_DIR
+CORPUS_CHARACTERS_DIR = CORPUS_DIR / "characters"
+CORPUS_LOCATIONS_DIR = CORPUS_DIR / "locations"
+CORPUS_FACTIONS_DIR = CORPUS_DIR / "factions"
+CORPUS_TIMELINE_DIR = CORPUS_DIR / "timeline"
 
 
 # Mapping from wiki JSON keys to entity types
@@ -25,11 +28,13 @@ WIKI_KEY_TO_ENTITY_TYPE = {
 
 
 def load_wiki_entries(wiki_path: Path | None = None) -> dict[str, set[str]]:
-    """
-    Load wiki JSON and extract canonical entity names by type.
-    
+    """Load wiki JSON and extract canonical entity names by type.
+
+    Args:
+        wiki_path: Path to the wiki JSON file. Defaults to ``WIKI_JSON_PATH``.
+
     Returns:
-        Dict mapping entity_type to set of canonical names
+        Dictionary mapping entity type to a set of lowercased canonical names.
     """
     wiki_path = wiki_path or WIKI_JSON_PATH
     
@@ -77,10 +82,18 @@ def load_wiki_entries(wiki_path: Path | None = None) -> dict[str, set[str]]:
 
 
 def fuzzy_match_name(name: str, canonical_names: set[str], threshold: int = FUZZY_MATCH_THRESHOLD) -> str | None:
-    """
-    Find best fuzzy match for a name against canonical names.
-    
-    Returns the matched canonical name if found, None otherwise.
+    """Find the best fuzzy match for a name against canonical names.
+
+    Uses both full-ratio and partial-ratio scoring from ``rapidfuzz``.
+
+    Args:
+        name: Entity name to match.
+        canonical_names: Set of lowercased canonical names to search.
+        threshold: Minimum score (0–100) to accept a match.
+
+    Returns:
+        The matched canonical name, or ``None`` if no match exceeds
+        the threshold.
     """
     name_lower = name.lower()
     
@@ -115,11 +128,21 @@ def classify_entity_priority(
     occurrence_count: int,
     wiki_names: set[str],
 ) -> tuple[Literal["canonical", "major", "minor"], str | None]:
-    """
-    Determine priority classification for an entity.
-    
+    """Determine priority classification for an entity.
+
+    Checks the primary name and aliases against the wiki first,
+    then falls back to occurrence count thresholds.
+
+    Args:
+        name: Primary entity name.
+        aliases: Known aliases for the entity.
+        entity_type: Entity category (used for wiki lookup keying).
+        occurrence_count: How many times the entity was found.
+        wiki_names: Set of canonical wiki names for this entity type.
+
     Returns:
-        Tuple of (priority, wiki_entry_name or None)
+        Tuple of ``(priority, wiki_entry_name)`` where
+        ``wiki_entry_name`` is ``None`` if no wiki match was found.
     """
     # Check for wiki match on primary name
     matched = fuzzy_match_name(name, wiki_names)
@@ -141,7 +164,15 @@ def classify_entity_priority(
 
 
 def get_entity_type_dir(entity_type: str) -> Path:
-    """Get corpus directory for entity type"""
+    """Return the corpus subdirectory for an entity type.
+
+    Args:
+        entity_type: One of ``character``, ``location``, ``faction``,
+            ``timeline_event``.
+
+    Returns:
+        Path to the corresponding corpus directory.
+    """
     type_to_dir = {
         "character": CORPUS_CHARACTERS_DIR,
         "location": CORPUS_LOCATIONS_DIR,
@@ -152,7 +183,14 @@ def get_entity_type_dir(entity_type: str) -> Path:
 
 
 def parse_entity_frontmatter(file_path: Path) -> dict | None:
-    """Parse YAML frontmatter from entity file"""
+    """Parse YAML frontmatter from a corpus entity markdown file.
+
+    Args:
+        file_path: Path to the ``.md`` entity file.
+
+    Returns:
+        Parsed frontmatter as a dictionary, or ``None`` if parsing fails.
+    """
     try:
         content = file_path.read_text(encoding="utf-8")
         if not content.startswith("---"):
@@ -180,15 +218,14 @@ def classify_corpus_entities(
     wiki_path: Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, dict[str, int]]:
-    """
-    Classify all corpus entities by priority based on wiki matching.
-    
+    """Classify all corpus entities by priority based on wiki matching.
+
     Args:
-        wiki_path: Path to wiki JSON file
-        dry_run: If True, don't modify files, just report
-    
+        wiki_path: Path to the wiki JSON file.
+        dry_run: If True, report only — do not modify files.
+
     Returns:
-        Stats dict with counts by entity type and priority
+        Nested dict of ``{entity_type: {priority: count}}``.
     """
     wiki_entries = load_wiki_entries(wiki_path)
     
@@ -241,7 +278,16 @@ def update_entity_priority(
     priority: Literal["canonical", "major", "minor"],
     wiki_entry_name: str | None,
 ) -> None:
-    """Update an entity file with priority metadata"""
+    """Update an entity markdown file with priority metadata.
+
+    Rewrites the YAML frontmatter in-place, adding ``priority``,
+    ``is_wiki_linked``, and optionally ``wiki_entry_name`` keys.
+
+    Args:
+        file_path: Path to the ``.md`` entity file.
+        priority: Priority tier to assign.
+        wiki_entry_name: Canonical wiki name, or ``None``.
+    """
     content = file_path.read_text(encoding="utf-8")
     
     if not content.startswith("---"):
@@ -286,7 +332,11 @@ def update_entity_priority(
 
 
 def print_classification_stats(stats: dict[str, dict[str, int]]) -> None:
-    """Print classification statistics in a readable format"""
+    """Print classification statistics in a human-readable table.
+
+    Args:
+        stats: Nested dict of ``{entity_type: {priority: count}}``.
+    """
     print("\n" + "=" * 60)
     print("Entity Classification Summary")
     print("=" * 60)

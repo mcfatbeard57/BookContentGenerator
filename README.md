@@ -1,30 +1,54 @@
-# 📚 Book → Canonical Corpus Builder
+# 📚 Book Content Pipeline
 
-An open-source, incremental knowledge extraction pipeline that ingests fantasy books (EPUB) and produces an LLM-ready corpus of characters, locations, factions, and timeline events.
+An open-source knowledge extraction pipeline that ingests fantasy books (EPUB) and produces structured JSON output containing characters, locations, factions, timeline events, and their connections — fully instrumented with tracing, telemetry, and idempotency.
 
 ## Features
 
-- **EPUB Ingestion**: Parse EPUB files with chapter extraction and text normalization
-- **Entity Extraction**: NER via Ollama (qwen2.5:7b-instruct)
-- **Alias Resolution**: Hybrid LLM + fuzzy matching approach
-- **Canonical Summarization**: Generate consistent descriptions (llama3.1:8b-instruct)
-- **Knowledge Graph**: JSON-based graph with relationship inference
-- **RAG Support**: FAISS index with nomic-embed-text embeddings
-- **Incremental Processing**: Hash-based tracking, idempotent updates
+- **EPUB Ingestion** — chapter extraction, text normalization, content hashing
+- **NER Extraction** — entity extraction via Ollama with chunked processing
+- **Alias Resolution** — hybrid LLM + fuzzy matching deduplication
+- **Canonical Summarization** — batched LLM summaries for each entity
+- **Connection Graph** — co-occurrence-based entity connections
+- **Priority Classification** — wiki-linked tiering (canonical / major / minor)
+- **Observability** — tracing, telemetry, progress events, checkpointing, idempotency
+
+## Architecture
+
+```
+src/
+├── config.py                  # All configuration knobs
+├── pipeline.py                # Main orchestrator (CLI entry point)
+├── ingestion/
+│   ├── epub_parser.py         # EPUB → chapters + metadata
+│   └── registry.py            # Ingestion log (skip already-processed books)
+├── extraction/
+│   ├── ner_extractor.py       # Ollama NER (chunked, instrumented)
+│   ├── alias_resolver.py      # LLM + fuzzy alias deduplication
+│   └── connections.py         # Co-occurrence connection builder
+├── enrichment/
+│   ├── summarizer.py          # Batched canonical summarization
+│   └── wiki_linker.py         # Wiki JSON matching + priority tiers
+├── cleanup/
+│   └── entity_cleanup.py      # Noise detection + corpus archival
+├── models/
+│   └── entities.py            # Pydantic models (Character, Location, Faction, TimelineEvent)
+└── observability/
+    ├── progress.py            # Semantic progress stages + interrupt support
+    ├── tracer.py              # Trace/span/decision/LLM-call logging
+    ├── telemetry.py           # Counters, histograms, gauges, timers
+    ├── checkpoint.py          # Incremental extraction checkpoints
+    └── idempotency.py         # Content-hash deduplication + staleness detection
+```
 
 ## Prerequisites
 
 - Python 3.11+
-- [Ollama](https://ollama.ai/) running locally with:
-  - `qwen2.5:7b-instruct`
-  - `llama3.1:8b-instruct`
-  - `nomic-embed-text`
+- [Ollama](https://ollama.ai/) running locally
 
 ```bash
-# Install Ollama models
-ollama pull qwen2.5:7b-instruct
-ollama pull llama3.1:8b-instruct
-ollama pull nomic-embed-text
+# Pull required models
+ollama pull qwen2.5:7b
+ollama pull llama3.1:8b
 ```
 
 ## Installation
@@ -34,76 +58,102 @@ ollama pull nomic-embed-text
 python -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
+# Install with dev dependencies
 pip install -e ".[dev]"
 ```
 
 ## Usage
 
-### Process a single book
+### Process a book
 
 ```bash
-python -m src.pipeline --input Data/Dungeon_Crawler_Carl_-_Matt_Dinniman.epub
+python -m src.pipeline Data/Dungeon_Crawler_Carl_-_Matt_Dinniman.epub
 ```
 
-### Process all books in Data/
+### Clear idempotency cache and reprocess
 
 ```bash
-python -m src.pipeline
+python -m src.pipeline --clear-cache Data/Dungeon_Crawler_Carl_-_Matt_Dinniman.epub
 ```
 
-### Force reprocessing
+## Output
 
-```bash
-python -m src.pipeline --force
+The pipeline produces a single JSON file per book in `output/`:
+
+```json
+{
+  "metadata": {
+    "book_id": "dungeon_crawler_carl",
+    "title": "Dungeon Crawler Carl",
+    "author": "Matt Dinniman",
+    "trace_id": "a1b2c3d4e5f6",
+    "model_versions": { "qwen2.5:7b": "abc123" },
+    "chapters": 42,
+    "word_count": 120000
+  },
+  "entities": [
+    {
+      "entity_id": "char_carl",
+      "name": "Carl",
+      "type": "character",
+      "aliases": ["Crawler Carl"],
+      "description": "...",
+      "occurrence_count": 350,
+      "physical_traits": ["..."],
+      "personality_traits": ["..."]
+    }
+  ],
+  "connections": [
+    {
+      "source_id": "char_carl",
+      "target_id": "loc_third_floor",
+      "weight": 12,
+      "co_occurrence_chapters": ["Chapter 1", "Chapter 5"]
+    }
+  ],
+  "telemetry": {
+    "duration_s": 180.5,
+    "llm_calls": 45,
+    "tokens_prompt": 250000,
+    "tokens_completion": 30000
+  }
+}
 ```
 
-## Output Structure
+### Observability Artifacts
 
-```
-corpus/
-├── metadata/
-│   └── ingestion_log.json      # Processing history
-├── characters/
-│   └── *.md                    # Character files
-├── locations/
-│   └── *.md                    # Location files
-├── factions/
-│   └── *.md                    # Faction files
-├── timeline/
-│   └── *.md                    # Timeline event files
-├── relationships/
-└── graph/
-    ├── world_graph.json        # Knowledge graph
-    └── entity_index.faiss      # Embeddings index
-```
+Each run also saves to `corpus/metadata/`:
 
-## Entity File Format
+| Artifact | Path | Purpose |
+|----------|------|---------|
+| Traces | `traces/{trace_id}.json` | Full LLM call + decision log |
+| Telemetry | `telemetry/telemetry_*.json` | Counters, histograms, timers |
+| Progress | `progress_logs/progress_*.json` | Semantic stage timeline |
+| Checkpoint | `extraction_checkpoint.json` | Resume interrupted runs |
+| Idempotency | `idempotency_state.json` | Skip already-processed chunks |
 
-Each entity is stored as Markdown with YAML front-matter:
+## Configuration
 
-```markdown
----
-entity_type: character
-entity_id: char_example
-name: Example Character
-aliases:
-  - Alias One
-sources:
-  - source_type: book
-    source_id: book_id
-last_updated: 2026-01-27
----
+All knobs are in [`src/config.py`](src/config.py):
 
-## Canonical Description
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `NER_MODEL` | `qwen2.5:7b` | Model for entity extraction |
+| `SUMMARIZER_MODEL` | `llama3.1:8b` | Model for summarization |
+| `CHUNK_SIZE` | `24000` | Characters per chunk |
+| `CHUNK_OVERLAP` | `400` | Overlap between chunks |
+| `FUZZY_MATCH_THRESHOLD` | `85` | Alias matching threshold |
+| `SUMMARIZER_BATCH_SIZE` | `5` | Entities per summarization call |
+| `CHECKPOINT_INTERVAL` | `5` | Save checkpoint every N chapters |
 
-Brief, canonical description of the entity.
+## Entity Types
 
-## Physical Traits
-
-- Trait 1
-- Trait 2
-```
+| Type | Model Class | Key Fields |
+|------|-------------|------------|
+| `character` | `Character` | physical_traits, personality_traits, abilities, role, species |
+| `location` | `Location` | location_type, environment, architecture, atmosphere |
+| `faction` | `Faction` | faction_type, goals, traits, base_location_id |
+| `timeline_event` | `TimelineEvent` | event_type, temporal_marker, participants, consequences |
 
 ## Testing
 
