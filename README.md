@@ -12,6 +12,7 @@ An open-source knowledge extraction pipeline that ingests fantasy books (EPUB) a
 - **Priority Classification** — wiki-linked tiering (canonical / major / minor)
 - **Observability** — tracing, telemetry, progress events, checkpointing, idempotency
 
+
 ## Architecture
 
 ```
