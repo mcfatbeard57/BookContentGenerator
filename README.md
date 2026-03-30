@@ -156,6 +156,7 @@ All knobs are in [`src/config.py`](src/config.py):
 | `faction` | `Faction` | faction_type, goals, traits, base_location_id |
 | `timeline_event` | `TimelineEvent` | event_type, temporal_marker, participants, consequences |
 
+
 ## Testing
 
 ```bash
