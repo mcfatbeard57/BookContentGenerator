@@ -52,6 +52,7 @@ ollama pull qwen2.5:7b
 ollama pull llama3.1:8b
 ```
 
+
 ## Installation
 
 ```bash
